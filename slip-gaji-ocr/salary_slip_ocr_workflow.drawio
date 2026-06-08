@@ -1,0 +1,73 @@
+<mxfile host="65bd71144e">
+    <diagram id="salary-slip-ocr-workflow" name="Salary Slip OCR Workflow">
+        <mxGraphModel dx="1354" dy="609" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="850" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Salary Slip OCR Workflow" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#111827;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="35" width="500" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="Classify each PDF first, extract salary fields only for likely salary slips, then write one compact result for one nasabah." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#4B5563;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="72" width="820" height="34" as="geometry"/>
+                </mxCell>
+                <mxCell id="input" value="Input&#xa;PDF or folder&#xa;one nasabah" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#111827;fontSize=13;fontStyle=1;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="150" width="155" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="read" value="Read Text&#xa;pypdfium2&#xa;password if needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#111827;fontSize=13;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="265" y="150" width="170" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="classify" value="Classify&#xa;salary slip score&#xa;accepted / uncertain / rejected" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#111827;fontSize=13;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="485" y="150" width="190" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision" value="Proceed?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;fontColor=#111827;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="735" y="142" width="120" height="98" as="geometry"/>
+                </mxCell>
+                <mxCell id="extract" value="Extract Fields&#xa;rules first&#xa;OCR / LLM if needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#111827;fontSize=13;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="150" width="185" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="summarize" value="Summarize&#xa;clean names&#xa;group same month/year" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#111827;fontSize=13;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="1250" y="150" width="185" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="reject" value="Rejected PDFs&#xa;summary.kesalahan[]&#xa;+ classifikasi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9CA3AF;fontColor=#374151;fontSize=12;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="300" width="150" height="74" as="geometry"/>
+                </mxCell>
+                <mxCell id="output" value="Output&#xa;extracted.json&#xa;summary.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontColor=#111827;fontSize=13;fontStyle=1;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="1250" y="300" width="185" height="82" as="geometry"/>
+                </mxCell>
+                <mxCell id="read_rules" value="Read text rules&#xa;- Try native PDF text first&#xa;- If encrypted: use --password or hidden prompt&#xa;- Reuse successful password during the run&#xa;- If text is weak, OCR can be used before final rejection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D1D5DB;fontColor=#374151;fontSize=11;align=left;verticalAlign=top;spacing=10;arcSize=6;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="240" width="175" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="classifier_rules" value="Classifier rules&#xa;Positive score&#xa;+30 title: Slip Gaji / Pay Slip / Salary Slip&#xa;+20 base pay: Gaji Pokok / Basic Salary&#xa;+20 paid total: Take Home Pay / Total Diterima&#xa;+15 deduction: Potongan / Pajak / PPh / BPJS&#xa;+10 employee or period label&#xa;+10 multiple money values&#xa;&#xa;Negative score&#xa;-30 invoice / faktur / receipt / rekening koran / contract / CV / KTP&#xa;&#xa;Threshold&#xa;&gt;=60 accepted, 40-59 uncertain, &lt;40 rejected" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D1D5DB;fontColor=#374151;fontSize=11;align=left;verticalAlign=top;spacing=10;arcSize=6;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="240" width="200" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="extract_rules" value="Extraction rules&#xa;- Required: nama_pekerja, nama_institusi, total_dibayar, gaji_pokok, potongan&#xa;- total_dibayar = gaji_pokok + tunjangan - potongan&#xa;- Bruto can be used when deductions are blank or zero&#xa;- OCR fallback for weak native text&#xa;- LLM text-only fallback for missing/unclear labels" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D1D5DB;fontColor=#374151;fontSize=11;align=left;verticalAlign=top;spacing=10;arcSize=6;" parent="1" vertex="1">
+                    <mxGeometry x="997.5" y="240" width="190" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="summary_rules" value="Summary rules&#xa;- nama_pekerja strips titles/punctuation, e.g. drg. and trailing comma&#xa;- nama_institusi keeps PT/CV name when present&#xa;- Same bulan+tahun rows are summed before averages&#xa;- Compact summary keys: metadata, nasabah, periode, dokumen, kesalahan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D1D5DB;fontColor=#374151;fontSize=11;align=left;verticalAlign=top;spacing=10;arcSize=6;" parent="1" vertex="1">
+                    <mxGeometry x="1250" y="398" width="190" height="162" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" parent="1" source="input" target="read" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" parent="1" source="read" target="classify" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" parent="1" source="classify" target="decision" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" value="accepted / uncertain" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;fontColor=#374151;fontSize=11;" parent="1" source="decision" target="extract" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" value="rejected" style="endArrow=block;html=1;rounded=0;strokeColor=#9CA3AF;fontColor=#6B7280;fontSize=11;" parent="1" source="decision" target="reject" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" parent="1" source="extract" target="summarize" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" style="endArrow=block;html=1;rounded=0;strokeColor=#6B7280;" parent="1" source="summarize" target="output" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
