@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { MobileApp } from "@/components/mobile/MobileApp";
 import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
 import { useNilamFlow } from "@/hooks/useNilamFlow";
+import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
 
 export default function Page() {
   const {
@@ -13,14 +14,32 @@ export default function Page() {
     canGoBack,
     uploads,
     events,
+    ocr,
+    docCounts,
+    agunan,
     setJointAnswer,
     start,
     next,
     goBack,
-    setUpload,
+    classifyAndUpload,
+    clearUploads,
+    fetchAgunanFromLink,
+    setAgunan,
+    clearAgunan,
+    slik,
+    userInput,
+    setUserInput,
     submit,
     reset,
   } = useNilamFlow();
+
+  const _income = incomePartsFromOcr(ocr);
+  const kemampuan = kemampuanBayar(
+    _income.gajiBulanan,
+    _income.thrTahunan,
+    _income.bonusTahunan,
+    slik?.totalAngsuran ?? 0,
+  );
 
   return (
     <AppShell
@@ -31,16 +50,36 @@ export default function Page() {
           currentStep={currentStep}
           canGoBack={canGoBack}
           uploads={uploads}
+          docCounts={docCounts}
+          ocr={ocr}
+          userInput={userInput}
+          setUserInput={setUserInput}
+          kemampuan={kemampuan}
+          agunan={agunan}
           start={start}
           next={next}
           goBack={goBack}
-          setUpload={setUpload}
+          classifyAndUpload={classifyAndUpload}
+          clearUploads={clearUploads}
+          fetchAgunanFromLink={fetchAgunanFromLink}
+          setAgunan={setAgunan}
+          clearAgunan={clearAgunan}
           setJointAnswer={setJointAnswer}
           submit={submit}
           reset={reset}
         />
       }
-      dashboard={<DocumentDashboard events={events} uploads={uploads} />}
+      dashboard={
+        <DocumentDashboard
+          events={events}
+          uploads={uploads}
+          ocr={ocr}
+          docCounts={docCounts}
+          agunan={agunan}
+          slik={slik}
+          userInput={userInput}
+        />
+      }
     />
   );
 }

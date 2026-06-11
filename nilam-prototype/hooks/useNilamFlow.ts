@@ -4,6 +4,12 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { FlowStep, PersonaConfig } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
+import type { OcrResults, ClassifyResult } from "@/types/ocrExtract";
+import type { DocumentId } from "@/types/documents";
+import type { AgunanData } from "@/types/agunan";
+import type { SlikReport } from "@/types/profile";
+import type { UserInput } from "@/types/userInput";
+import { usiaDariKtp } from "@/lib/usia";
 import type { EventListener } from "@/engines/orchestrator/events";
 import { planFlow } from "@/engines/persona/personaEngine";
 import { WorkflowOrchestrator } from "@/engines/orchestrator/workflowOrchestrator";
@@ -26,6 +32,16 @@ export interface NilamState {
   events: OrchestrationEvent[];
   nasabah?: CustomerIncome;
   pasangan?: CustomerIncome;
+  /** Real OCR-extracted data for Slip Gaji & SK Perusahaan (when uploaded). */
+  ocr: OcrResults;
+  /** Number of files classified per document type (e.g. how many slip/mutasi). */
+  docCounts: Partial<Record<DocumentId, number>>;
+  /** Collateral/property data (manual or from a Rumah123 link). */
+  agunan?: AgunanData;
+  /** SLIK report fetched by NIK (from the SLIK CSV). */
+  slik?: SlikReport;
+  /** Borrower application data (prefilled from OCR, editable on Data Diri). */
+  userInput: UserInput;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +59,14 @@ export type NilamAction =
   | { type: "appendEvent"; event: OrchestrationEvent }
   | { type: "setIncome"; role: "nasabah" | "pasangan"; income: CustomerIncome }
   | { type: "setComponent"; role: "nasabah" | "pasangan"; key: ComponentKey; patch: { mode?: ComponentMode; weight?: number } }
+  | { type: "setOcr"; doc: keyof OcrResults; data: OcrResults[keyof OcrResults] }
+  | { type: "classify"; counts: Partial<Record<DocumentId, number>> }
+  | { type: "clearUploads" }
+  | { type: "setAgunan"; data: AgunanData }
+  | { type: "clearAgunan" }
+  | { type: "setSlik"; data: SlikReport }
+  | { type: "setUserInput"; patch: Partial<UserInput> }
+  | { type: "prefillUserInput"; data: Partial<UserInput> }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -59,6 +83,9 @@ export function initialState(): NilamState {
     events: [],
     nasabah: undefined,
     pasangan: undefined,
+    ocr: {},
+    docCounts: {},
+    userInput: {},
   };
 }
 
@@ -76,6 +103,9 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     events: [],
     nasabah: undefined,
     pasangan: undefined,
+    ocr: {},
+    docCounts: {},
+    userInput: {},
   };
 }
 
@@ -153,6 +183,39 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
         },
       };
     }
+
+    case "setOcr":
+      return { ...state, ocr: { ...state.ocr, [action.doc]: action.data } };
+
+    case "classify": {
+      const uploads = { ...state.uploads };
+      const docCounts = { ...state.docCounts };
+      for (const [key, count] of Object.entries(action.counts)) {
+        if (!count) continue;
+        uploads[key] = true;
+        docCounts[key as DocumentId] = (docCounts[key as DocumentId] ?? 0) + count;
+      }
+      return { ...state, uploads, docCounts };
+    }
+
+    case "clearUploads":
+      return { ...state, uploads: {}, docCounts: {}, ocr: {} };
+
+    case "setAgunan":
+      return { ...state, agunan: { ...state.agunan, ...action.data } };
+
+    case "clearAgunan":
+      return { ...state, agunan: undefined };
+
+    case "setSlik":
+      return { ...state, slik: action.data };
+
+    case "setUserInput":
+      return { ...state, userInput: { ...state.userInput, ...action.patch } };
+
+    case "prefillUserInput":
+      // OCR-derived defaults fill only fields the user hasn't set yet.
+      return { ...state, userInput: { ...action.data, ...state.userInput } };
 
     case "reset":
       return initialState();
@@ -235,6 +298,236 @@ export function useNilamFlow() {
     dispatch({ type: "setUpload", key, value });
   }, []);
 
+  // Real upload: send a PDF to the Next.js OCR proxy, store the extracted data,
+  // and mark the document uploaded. Used for Slip Gaji & SK Perusahaan.
+  const uploadOcrDocument = useCallback(
+    async (
+      docId: "slip_gaji" | "sk_perusahaan",
+      files: File[],
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!files.length) return { ok: false, error: "Tidak ada file dipilih" };
+      const endpoint = docId === "slip_gaji" ? "/api/ocr/slip-gaji" : "/api/ocr/sk-perusahaan";
+      const form = new FormData();
+      for (const f of files) form.append("file", f);
+      try {
+        const resp = await fetch(endpoint, { method: "POST", body: form });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.ok) {
+          return { ok: false, error: json?.error ?? `Gagal memproses dokumen (${resp.status})` };
+        }
+        dispatch({
+          type: "setOcr",
+          doc: docId === "slip_gaji" ? "slipGaji" : "skPerusahaan",
+          data: json.extract,
+        });
+        dispatch({ type: "setUpload", key: docId, value: true });
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Tidak dapat menghubungi server OCR" };
+      }
+    },
+    [],
+  );
+
+  // Single upload menu: classify every file (local classifier), assign each to a
+  // document type, count them, then run OCR extraction for slip & SK.
+  const classifyAndUpload = useCallback(
+    async (
+      files: File[],
+    ): Promise<{ ok: boolean; results?: ClassifyResult[]; error?: string }> => {
+      if (!files.length) return { ok: false, error: "Tidak ada file dipilih" };
+
+      let results: ClassifyResult[];
+      try {
+        const form = new FormData();
+        for (const f of files) form.append("file", f);
+        const resp = await fetch("/api/ocr/classify", { method: "POST", body: form });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.ok) {
+          return { ok: false, error: json?.error ?? `Gagal mengklasifikasi (${resp.status})` };
+        }
+        results = json.results as ClassifyResult[];
+      } catch {
+        return { ok: false, error: "Tidak dapat menghubungi server classifier" };
+      }
+
+      // Group files by detected document type. One upload menu handles ALL docs
+      // (KTP/KK included) — each is auto-classified, then OCR-extracted below.
+      const LABEL_TO_DOC: Record<string, DocumentId | undefined> = {
+        ktp: "ktp",
+        kk: "kk",
+        slip: "slip_gaji",
+        mutasi: "mutasi",
+        sk: "sk_perusahaan",
+        unknown: undefined,
+      };
+      const groups: Partial<Record<DocumentId, File[]>> = {};
+      results.forEach((r, i) => {
+        const docId = LABEL_TO_DOC[r.type];
+        if (!docId || !files[i]) return;
+        (groups[docId] ??= []).push(files[i]);
+      });
+
+      const counts: Partial<Record<DocumentId, number>> = {};
+      (Object.keys(groups) as DocumentId[]).forEach((k) => {
+        counts[k] = groups[k]!.length;
+      });
+      dispatch({ type: "classify", counts });
+
+      // Extract content for the dashboard cards.
+      if (groups.ktp?.length) {
+        // The classifier already extracted KTP fields in the same OCR pass —
+        // reuse them instead of OCR-ing the KTP a second time.
+        const ktpExtract = results.find((r) => r.type === "ktp" && r.extract)?.extract;
+        if (ktpExtract) dispatch({ type: "setOcr", doc: "ktp", data: ktpExtract });
+        else await uploadIdentitas("ktp", groups.ktp);
+        // Pull the SLIK report for this NIK (from the SLIK CSV).
+        const nik = ktpExtract?.nik;
+        if (nik) {
+          try {
+            const r = await fetch(`/api/slik?nik=${encodeURIComponent(nik)}`);
+            const j = await r.json().catch(() => null);
+            if (r.ok && j?.ok && j.report) dispatch({ type: "setSlik", data: j.report });
+          } catch {
+            /* SLIK is best-effort */
+          }
+        }
+      }
+      if (groups.kk?.length) await uploadIdentitas("kk", groups.kk);
+      if (groups.slip_gaji?.length) {
+        const f = new FormData();
+        for (const file of groups.slip_gaji) f.append("file", file); // all slips (per payment date)
+        try {
+          const resp = await fetch("/api/ocr/slip", { method: "POST", body: f });
+          const json = await resp.json().catch(() => null);
+          if (resp.ok && json?.ok) dispatch({ type: "setOcr", doc: "slipGaji", data: json.extract });
+        } catch {
+          /* best-effort */
+        }
+      }
+      if (groups.sk_perusahaan?.length) {
+        const f = new FormData();
+        f.append("file", groups.sk_perusahaan[0]);
+        try {
+          const resp = await fetch("/api/ocr/sk", { method: "POST", body: f });
+          const json = await resp.json().catch(() => null);
+          if (resp.ok && json?.ok) dispatch({ type: "setOcr", doc: "skPerusahaan", data: json.extract });
+        } catch {
+          /* best-effort */
+        }
+      }
+      if (groups.mutasi?.length) {
+        const f = new FormData();
+        for (const file of groups.mutasi) f.append("file", file); // all months
+        try {
+          const resp = await fetch("/api/ocr/mutasi", { method: "POST", body: f });
+          const json = await resp.json().catch(() => null);
+          if (resp.ok && json?.ok) dispatch({ type: "setOcr", doc: "mutasi", data: json.extract });
+        } catch {
+          /* mutasi extraction is best-effort */
+        }
+      }
+
+      return { ok: true, results };
+    },
+    [uploadOcrDocument],
+  );
+
+  const clearUploads = useCallback(() => {
+    dispatch({ type: "clearUploads" });
+  }, []);
+
+  // Separate KTP/KK upload: read the document via OCR (Tesseract + regex) and
+  // store the extracted identity — not dummy/auto-input.
+  const uploadIdentitas = useCallback(
+    async (docId: "ktp" | "kk", files: File[]): Promise<{ ok: boolean; error?: string }> => {
+      if (!files.length) return { ok: false, error: "Tidak ada file dipilih" };
+      const form = new FormData();
+      form.append("file", files[0]);
+      form.append("type", docId);
+      try {
+        const resp = await fetch("/api/ocr/identitas", { method: "POST", body: form });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.ok) {
+          return { ok: false, error: json?.error ?? `Gagal membaca dokumen (${resp.status})` };
+        }
+        dispatch({ type: "setOcr", doc: docId, data: json.extract });
+        dispatch({ type: "setUpload", key: docId, value: true });
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Tidak dapat menghubungi server OCR" };
+      }
+    },
+    [],
+  );
+
+  const setAgunan = useCallback((data: AgunanData) => {
+    dispatch({ type: "setAgunan", data });
+  }, []);
+
+  const clearAgunan = useCallback(() => {
+    dispatch({ type: "clearAgunan" });
+  }, []);
+
+  const setUserInput = useCallback((patch: Partial<UserInput>) => {
+    dispatch({ type: "setUserInput", patch });
+  }, []);
+
+  // Pull the SLIK report (Excel by NIK) as soon as the KTP NIK is known.
+  useEffect(() => {
+    const nik = state.ocr.ktp?.nik;
+    if (!nik || state.slik) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/slik?nik=${encodeURIComponent(nik)}`);
+        const j = await r.json().catch(() => null);
+        if (!cancelled && r.ok && j?.ok && j.report) dispatch({ type: "setSlik", data: j.report });
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.ocr.ktp?.nik, state.slik]);
+
+  // Prefill the Data Diri form from KTP/KK OCR (only fields not yet edited).
+  useEffect(() => {
+    const ktp = state.ocr.ktp;
+    const kk = state.ocr.kk;
+    const prefill: Partial<UserInput> = {};
+    if (ktp?.nik) prefill.nik = ktp.nik;
+    if (ktp?.nama) prefill.nama = ktp.nama;
+    const usia = usiaDariKtp(ktp?.tanggalLahir);
+    if (usia != null) prefill.usia = usia;
+    if (ktp?.statusPerkawinan) prefill.statusKawin = ktp.statusPerkawinan;
+    if (kk?.members?.length) prefill.jumlahTanggungan = Math.max(0, kk.members.length - 1);
+    if (Object.keys(prefill).length) dispatch({ type: "prefillUserInput", data: prefill });
+  }, [state.ocr.ktp, state.ocr.kk]);
+
+  // Fetch & extract agunan data from a property listing link (Rumah123).
+  const fetchAgunanFromLink = useCallback(
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const resp = await fetch("/api/agunan/from-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.ok) {
+          return { ok: false, error: json?.error ?? `Gagal mengambil data (${resp.status})` };
+        }
+        dispatch({ type: "setAgunan", data: json.data });
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Tidak dapat menghubungi server" };
+      }
+    },
+    [],
+  );
+
   const setComponentMode = useCallback(
     (role: "nasabah" | "pasangan", key: ComponentKey, mode: ComponentMode) => {
       dispatch({ type: "setComponent", role, key, patch: { mode } });
@@ -303,7 +596,7 @@ export function useNilamFlow() {
     // orchestrator instance is still the active one.
     orch.run(state.persona, outputs, emit).then(() => {
       if (orchestratorRef.current === orch) {
-        dispatch({ type: "goTo", step: "analyst_decision" });
+        dispatch({ type: "goTo", step: "offering" });
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,6 +614,12 @@ export function useNilamFlow() {
     events: state.events,
     nasabah: state.nasabah,
     pasangan: state.pasangan,
+    ocr: state.ocr,
+    docCounts: state.docCounts,
+    agunan: state.agunan,
+    slik: state.slik,
+    userInput: state.userInput,
+    setUserInput,
     setNasabahPayroll,
     setPasanganPayroll,
     setJointAnswer,
@@ -328,6 +627,13 @@ export function useNilamFlow() {
     next,
     goBack,
     setUpload,
+    uploadOcrDocument,
+    classifyAndUpload,
+    uploadIdentitas,
+    clearUploads,
+    setAgunan,
+    clearAgunan,
+    fetchAgunanFromLink,
     submit,
     setComponentMode,
     setComponentWeight,

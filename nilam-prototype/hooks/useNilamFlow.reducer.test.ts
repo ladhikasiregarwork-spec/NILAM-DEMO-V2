@@ -3,7 +3,7 @@ import { nilamReducer, initialState } from "./useNilamFlow";
 import type { NilamState } from "./useNilamFlow";
 import { planFlow } from "@/engines/persona/personaEngine";
 import { DEFAULT_PERSONA } from "@/data/personas";
-import type { PersonaConfig } from "@/types/flow";
+import type { PersonaConfig, FlowStep } from "@/types/flow";
 import type { OrchestrationEvent } from "@/types/orchestration";
 import type { CustomerIncome } from "@/types/income";
 
@@ -268,6 +268,9 @@ describe("nilamReducer — goBack", () => {
       events: [makeEvent(), makeEvent("income")],
       nasabah: makeIncome("nasabah"),
       pasangan: makeIncome("pasangan"),
+      ocr: {},
+      docCounts: {},
+      userInput: {},
     };
 
     const after = nilamReducer(stateAtProcessing, { type: "goBack" });
@@ -294,6 +297,9 @@ describe("nilamReducer — goBack", () => {
       events: [makeEvent()],
       nasabah: makeIncome("nasabah"),
       pasangan: undefined,
+      ocr: {},
+      docCounts: {},
+      userInput: {},
     };
 
     const after = nilamReducer(stateAtAnalyst, { type: "goBack" });
@@ -393,13 +399,16 @@ describe("nilamReducer — reset", () => {
   it("returns to initial state: DEFAULT_PERSONA, steps=UNIFORM_STEPS, stepIndex 0", () => {
     const populated: NilamState = {
       persona: makePersona(false, true),
-      steps: UNIFORM_STEPS,
+      steps: UNIFORM_STEPS as FlowStep[],
       stepIndex: 3,
       jointAnswer: "ya",
       uploads: { slip: true, mutasi: true },
       events: [makeEvent(), makeEvent()],
       nasabah: makeIncome("nasabah"),
       pasangan: makeIncome("pasangan"),
+      ocr: {},
+      docCounts: {},
+      userInput: {},
     };
 
     const after = nilamReducer(populated, { type: "reset" });

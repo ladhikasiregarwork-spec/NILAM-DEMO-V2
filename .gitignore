@@ -122,3 +122,17 @@ $RECYCLE.BIN/
 
 # Unrelated sibling project (its own git repo)
 salary-slip-parser-api/
+
+# =============================================================================
+#  Scratch / PII / large artifacts — never commit
+# =============================================================================
+# OCR diagnostic scratch — includes rendered crops of REAL KTP scans (PII).
+_ocr_test/
+# Bundled Tesseract language data (large, re-downloadable).
+local_classifier/tessdata/
+# Node / Next.js (belt-and-suspenders in case a sub-.gitignore is missing).
+node_modules/
+.next/
+# Stray spreadsheet/CSV PII anywhere.
+*.xlsx
+*.csv

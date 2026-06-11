@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { FlowStep, PersonaConfig } from "@/types/flow";
+import type { ClassifyResult, OcrResults } from "@/types/ocrExtract";
+import type { UserInput } from "@/types/userInput";
+import type { DocumentId } from "@/types/documents";
+import type { AgunanData } from "@/types/agunan";
 
 import { PhoneMockup } from "./PhoneMockup";
 import { MobileHeader } from "./MobileHeader";
@@ -10,9 +14,13 @@ import { BottomNav } from "./BottomNav";
 import { FlowStepper } from "./FlowStepper";
 
 import { OpeningScreen } from "./screens/OpeningScreen";
+import { TermConditionScreen } from "./screens/TermConditionScreen";
 import { RequirementScreen } from "./screens/RequirementScreen";
+import { DataDiriScreen } from "./screens/DataDiriScreen";
+import { AgunanScreen } from "./screens/AgunanScreen";
 import { ProcessingScreen } from "./screens/ProcessingScreen";
-import { AnalystDecisionScreen } from "./screens/AnalystDecisionScreen";
+import { OfferingScreen } from "./screens/OfferingScreen";
+import { DisburseScreen } from "./screens/DisburseScreen";
 
 // ─── Slide variants ──────────────────────────────────────────────────────────
 
@@ -32,10 +40,23 @@ interface MobileAppProps {
   currentStep: FlowStep;
   canGoBack: boolean;
   uploads: Record<string, boolean>;
+  docCounts: Partial<Record<DocumentId, number>>;
+  ocr: OcrResults;
+  userInput: UserInput;
+  setUserInput: (patch: Partial<UserInput>) => void;
+  /** Monthly payment capacity (gaji + THR/12 + bonus/12 − SLIK). */
+  kemampuan: number;
+  agunan?: AgunanData;
   start: () => void;
   next: () => void;
   goBack: () => void;
-  setUpload: (key: string, value?: boolean) => void;
+  classifyAndUpload: (
+    files: File[],
+  ) => Promise<{ ok: boolean; results?: ClassifyResult[]; error?: string }>;
+  clearUploads: () => void;
+  fetchAgunanFromLink: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  setAgunan: (data: AgunanData) => void;
+  clearAgunan: () => void;
   setJointAnswer: (ans: "ya" | "tidak") => void;
   submit: () => void;
   reset: () => void;
@@ -53,10 +74,20 @@ export function MobileApp({
   currentStep,
   canGoBack,
   uploads,
+  docCounts,
+  ocr,
+  userInput,
+  setUserInput,
+  kemampuan,
+  agunan,
   start,
   next,
   goBack,
-  setUpload,
+  classifyAndUpload,
+  clearUploads,
+  fetchAgunanFromLink,
+  setAgunan,
+  clearAgunan,
   setJointAnswer,
   submit,
   reset,
@@ -84,12 +115,42 @@ export function MobileApp({
             onStart={start}
           />
         );
+      case "term_condition":
+        return <TermConditionScreen key="term_condition" onAccept={next} />;
+      case "data_diri":
+        return (
+          <DataDiriScreen
+            key="data_diri"
+            userInput={userInput}
+            setUserInput={setUserInput}
+            prefilled={!!ocr.ktp || !!ocr.kk}
+            onSubmit={next}
+            onGoBack={goBack}
+            canGoBack={canGoBack}
+          />
+        );
       case "requirement":
         return (
           <RequirementScreen
             key="requirement"
             uploads={uploads}
-            onUpload={setUpload}
+            docCounts={docCounts}
+            classifyAndUpload={classifyAndUpload}
+            clearUploads={clearUploads}
+            onSubmit={next}
+            validating={false}
+            onGoBack={goBack}
+            canGoBack={canGoBack}
+          />
+        );
+      case "agunan":
+        return (
+          <AgunanScreen
+            key="agunan"
+            agunan={agunan}
+            onFetchLink={fetchAgunanFromLink}
+            onSetAgunan={setAgunan}
+            onClear={clearAgunan}
             onSubmit={handleSubmit}
             validating={validating}
             onGoBack={goBack}
@@ -98,10 +159,21 @@ export function MobileApp({
         );
       case "processing":
         return <ProcessingScreen key="processing" />;
-      case "analyst_decision":
+      case "offering":
         return (
-          <AnalystDecisionScreen key="analyst_decision" onRestart={reset} />
+          <OfferingScreen
+            key="offering"
+            agunan={agunan}
+            tanggalLahir={ocr.ktp?.tanggalLahir}
+            uangMuka={userInput.uangMuka}
+            jangkaWaktu={userInput.jangkaWaktu}
+            kemampuan={kemampuan}
+            onAccept={next}
+            canGoBack={false}
+          />
         );
+      case "disburse":
+        return <DisburseScreen key="disburse" agunan={agunan} uangMuka={userInput.uangMuka} onFinish={reset} />;
       default:
         return (
           <OpeningScreen
