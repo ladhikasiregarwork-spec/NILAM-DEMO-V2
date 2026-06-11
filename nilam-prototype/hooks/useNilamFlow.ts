@@ -4,7 +4,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { FlowStep, PersonaConfig } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
-import type { OcrResults, ClassifyResult } from "@/types/ocrExtract";
+import type { OcrResults, ClassifyResult, PreviewDoc } from "@/types/ocrExtract";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { SlikReport } from "@/types/profile";
@@ -42,6 +42,8 @@ export interface NilamState {
   slik?: SlikReport;
   /** Borrower application data (prefilled from OCR, editable on Data Diri). */
   userInput: UserInput;
+  /** Uploaded documents kept for preview (blob URLs + classified type). */
+  previewDocs: PreviewDoc[];
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +69,7 @@ export type NilamAction =
   | { type: "setSlik"; data: SlikReport }
   | { type: "setUserInput"; patch: Partial<UserInput> }
   | { type: "prefillUserInput"; data: Partial<UserInput> }
+  | { type: "addPreviewDocs"; docs: PreviewDoc[] }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -86,6 +89,7 @@ export function initialState(): NilamState {
     ocr: {},
     docCounts: {},
     userInput: {},
+    previewDocs: [],
   };
 }
 
@@ -106,6 +110,7 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     ocr: {},
     docCounts: {},
     userInput: {},
+    previewDocs: [],
   };
 }
 
@@ -199,7 +204,10 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
     }
 
     case "clearUploads":
-      return { ...state, uploads: {}, docCounts: {}, ocr: {} };
+      return { ...state, uploads: {}, docCounts: {}, ocr: {}, previewDocs: [] };
+
+    case "addPreviewDocs":
+      return { ...state, previewDocs: [...state.previewDocs, ...action.docs] };
 
     case "setAgunan":
       return { ...state, agunan: { ...state.agunan, ...action.data } };
@@ -367,6 +375,14 @@ export function useNilamFlow() {
         if (!docId || !files[i]) return;
         (groups[docId] ??= []).push(files[i]);
       });
+
+      // Keep each uploaded file (blob URL + classified type) for the dashboard
+      // document preview.
+      const previewDocs: PreviewDoc[] = [];
+      results.forEach((r, i) => {
+        if (files[i]) previewDocs.push({ type: r.type, url: URL.createObjectURL(files[i]), originalName: files[i].name });
+      });
+      if (previewDocs.length) dispatch({ type: "addPreviewDocs", docs: previewDocs });
 
       const counts: Partial<Record<DocumentId, number>> = {};
       (Object.keys(groups) as DocumentId[]).forEach((k) => {
@@ -620,6 +636,7 @@ export function useNilamFlow() {
     slik: state.slik,
     userInput: state.userInput,
     setUserInput,
+    previewDocs: state.previewDocs,
     setNasabahPayroll,
     setPasanganPayroll,
     setJointAnswer,

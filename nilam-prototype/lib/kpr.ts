@@ -1,3 +1,11 @@
+/** Largest principal whose monthly annuity ≤ `angsuran` at the given rate/months. */
+export function maxPlafond(angsuran: number, annualRate: number, months: number): number {
+  if (angsuran <= 0 || months <= 0) return 0;
+  const im = annualRate / 12;
+  if (im === 0) return Math.round(angsuran * months);
+  return Math.round((angsuran * (1 - Math.pow(1 + im, -months))) / im);
+}
+
 /** Monthly annuity installment for a principal at an annual rate over N months. */
 export function anuitas(principal: number, annualRate: number, months: number): number {
   if (months <= 0 || principal <= 0) return 0;

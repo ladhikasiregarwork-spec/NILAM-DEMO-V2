@@ -29,6 +29,7 @@ export default function Page() {
     slik,
     userInput,
     setUserInput,
+    previewDocs,
     submit,
     reset,
   } = useNilamFlow();
@@ -78,6 +79,7 @@ export default function Page() {
           agunan={agunan}
           slik={slik}
           userInput={userInput}
+          previewDocs={previewDocs}
         />
       }
     />

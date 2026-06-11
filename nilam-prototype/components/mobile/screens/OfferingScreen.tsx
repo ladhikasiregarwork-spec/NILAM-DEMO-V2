@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { BadgeCheck, Home, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
-import { buildSchedule, maxTenorByAge } from "@/lib/kpr";
+import { buildSchedule, maxTenorByAge, maxPlafond } from "@/lib/kpr";
 import { KPR_SCHEMES, ratePlan, FLOATING_RATE } from "@/data/kprRates";
 import { usiaDariKtp } from "@/lib/usia";
 import type { AgunanData } from "@/types/agunan";
@@ -45,6 +45,11 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
   const tenor = tenorPilih ?? tenorNasabah;
 
   const mampu = (angsuran: number) => kemampuan == null || kemampuan <= 0 || angsuran <= kemampuan;
+  // Extra DP needed so the (promo-rate) angsuran fits the payment capacity.
+  const tambahanDp = (rate: number, tenorYears: number) => {
+    if (kemampuan == null || kemampuan <= 0 || harga <= 0) return 0;
+    return Math.max(0, harga - dp - maxPlafond(kemampuan, rate, tenorYears * 12));
+  };
 
   const options = useMemo(
     () =>
@@ -69,7 +74,7 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
     return tenors.map((t) => {
       const sched = plafon > 0 ? buildSchedule(plafon, t, ratePlan(s, t)) : [];
       const promo = sched[0]?.angsuran ?? 0;
-      return { t, promo, ok: mampu(promo), isNasabah: t === tenorNasabah, isSelected: t === tenor };
+      return { t, promo, rate: sched[0]?.rate ?? 0, ok: mampu(promo), isNasabah: t === tenorNasabah, isSelected: t === tenor };
     });
   }, [active, tenor, tenorNasabah, tenorMaks, plafon, kemampuan]);
 
@@ -114,7 +119,9 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
                 </div>
                 <div className="shrink-0 text-right">
                   <div className={cn("text-[11px] font-bold tabular-nums", ok ? "text-bri-blue" : "text-red-500")}>{formatRupiah(promo)}</div>
-                  <div className={cn("text-[7px]", ok ? "text-bri-muted" : "text-red-400")}>{ok ? `awal /bln · ${t} thn` : "melebihi kemampuan"}</div>
+                  <div className={cn("text-[7px]", ok ? "text-bri-muted" : "font-semibold text-red-500")}>
+                    {ok ? `awal /bln · ${t} thn` : `tambah DP ${formatRupiah(tambahanDp(schedule[0]?.rate ?? 0, t))}`}
+                  </div>
                 </div>
                 <ChevronDown size={14} className={cn("shrink-0 text-bri-muted transition-transform", on && "rotate-180")} />
               </button>
@@ -146,7 +153,7 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
             Rekomendasi Tenor Lain <span className="font-normal normal-case text-bri-muted/70">· {active.scheme.label} · klik untuk pilih</span>
           </p>
           <div className="grid grid-cols-2 gap-1.5">
-            {altRows.map(({ t, promo, ok, isNasabah, isSelected }) => (
+            {altRows.map(({ t, promo, rate, ok, isNasabah, isSelected }) => (
               <button
                 key={t}
                 type="button"
@@ -159,7 +166,10 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
                 <span className="text-[9px] font-semibold text-bri-ink">
                   {t} thn{isNasabah && <span className="ml-1 text-[7px] text-bri-blue">(input)</span>}
                 </span>
-                <span className={cn("text-[10px] font-bold tabular-nums", ok ? "text-bri-ink" : "text-red-500")}>{formatRupiah(promo)}</span>
+                <span className="text-right">
+                  <span className={cn("block text-[10px] font-bold tabular-nums", ok ? "text-bri-ink" : "text-red-500")}>{formatRupiah(promo)}</span>
+                  {!ok && <span className="block text-[6.5px] font-semibold text-red-500">tambah DP {formatRupiah(tambahanDp(rate, t))}</span>}
+                </span>
               </button>
             ))}
           </div>
@@ -175,6 +185,21 @@ export function OfferingScreen({ agunan, tanggalLahir, uangMuka, jangkaWaktu, ke
       )}
 
       <div className="flex-1" />
+
+      {/* Selected scheme summary + extra-DP warning */}
+      {active && (
+        active.promo <= (kemampuan ?? Infinity) || kemampuan == null || kemampuan <= 0 ? (
+          <div className="mt-2 rounded-bubble bg-bri-bg px-2.5 py-1.5 text-[8.5px] text-bri-ink">
+            Dipilih: <b>{active.scheme.label}</b> · {active.tenor} thn · angsuran awal{" "}
+            <b className="text-bri-blue">{formatRupiah(active.promo)}</b>/bln (lalu floating {pct(FLOATING_RATE)})
+          </div>
+        ) : (
+          <div className="mt-2 rounded-bubble border border-red-200 bg-red-50/60 px-2.5 py-1.5 text-[8.5px] text-red-600">
+            <b>{active.scheme.label} · {active.tenor} thn</b> melebihi kemampuan — perlu{" "}
+            <b>tambah DP {formatRupiah(tambahanDp(active.schedule[0]?.rate ?? 0, active.tenor))}</b> agar bisa pakai penawaran ini.
+          </div>
+        )
+      )}
 
       <button
         type="button"

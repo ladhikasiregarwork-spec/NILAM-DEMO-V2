@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Calculator, CheckCircle2, AlertTriangle, Pencil } from "lucide-react";
 import { formatRupiah } from "@/lib/formatRupiah";
 import { anuitas } from "@/lib/kpr";
-import { kemampuanBayar } from "@/lib/kemampuan";
+import { kemampuanBayar, penghasilanBulanan, dirRate } from "@/lib/kemampuan";
 import type { NodeStatus } from "@/types/orchestration";
 import type { AgunanData } from "@/types/agunan";
 
@@ -53,6 +53,8 @@ export function InstallmentCard({
   const [bonusEdit, setBonusEdit] = useState<number | null>(null);
   const bonus = bonusEdit ?? bonusTahunan;
 
+  const penghasilan = penghasilanBulanan(gajiBulanan, thrTahunan, bonus);
+  const dir = dirRate(penghasilan);
   const kemampuan = kemampuanBayar(gajiBulanan, thrTahunan, bonus, slikAngsuran);
 
   const harga = agunan?.harga;
@@ -86,7 +88,7 @@ export function InstallmentCard({
           <div className="flex w-[210px] shrink-0 flex-col justify-center rounded-lg bg-white/10 px-3 py-2">
             <span className="text-[9px] text-white/70">Kemampuan Bayar / bln</span>
             <span className="text-[22px] font-bold leading-tight text-white tabular-nums">{formatRupiah(kemampuan)}</span>
-            <span className="text-[8px] text-white/60">gaji + THR/12 + bonus/12 − SLIK</span>
+            <span className="text-[8px] text-white/60">(gaji + THR/12 + bonus/12 − SLIK) × DIR {Math.round(dir * 100)}%</span>
             {kprAngsuran != null && (
               <span className={`mt-1 inline-flex w-fit items-center gap-1 rounded-pill px-1.5 py-0.5 text-[8px] font-semibold ${layak ? "bg-emerald-400/20 text-emerald-200" : "bg-red-400/20 text-red-200"}`}>
                 {layak ? <CheckCircle2 size={9} /> : <AlertTriangle size={9} />}
@@ -117,7 +119,10 @@ export function InstallmentCard({
                 <span className="text-[8px] text-white/50">/12</span>
               </span>
             </div>
+            <div className="my-0.5 border-t border-white/20" />
+            <Row label="Penghasilan / bln" value={formatRupiah(Math.round(penghasilan))} />
             <Row label="Angsuran SLIK (aktif)" value={`− ${formatRupiah(slikAngsuran)}`} />
+            <Row label="× DIR (sesuai penghasilan)" value={`${Math.round(dir * 100)}%`} />
             <div className="my-0.5 border-t border-white/20" />
             <Row label="Kemampuan Bayar" value={formatRupiah(kemampuan)} strong />
             {kprAngsuran != null && (

@@ -271,6 +271,7 @@ describe("nilamReducer — goBack", () => {
       ocr: {},
       docCounts: {},
       userInput: {},
+      previewDocs: [],
     };
 
     const after = nilamReducer(stateAtProcessing, { type: "goBack" });
@@ -300,6 +301,7 @@ describe("nilamReducer — goBack", () => {
       ocr: {},
       docCounts: {},
       userInput: {},
+      previewDocs: [],
     };
 
     const after = nilamReducer(stateAtAnalyst, { type: "goBack" });
@@ -409,6 +411,7 @@ describe("nilamReducer — reset", () => {
       ocr: {},
       docCounts: {},
       userInput: {},
+      previewDocs: [],
     };
 
     const after = nilamReducer(populated, { type: "reset" });

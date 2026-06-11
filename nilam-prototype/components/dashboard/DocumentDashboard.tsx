@@ -3,7 +3,7 @@
 import { useOrchestrationFeed } from "@/hooks/useOrchestrationFeed";
 import { deriveDocumentStatuses } from "@/data/documents";
 import type { OrchestrationEvent } from "@/types/orchestration";
-import type { OcrResults } from "@/types/ocrExtract";
+import type { OcrResults, PreviewDoc } from "@/types/ocrExtract";
 import type { EmploymentAgreement, SlikReport } from "@/types/profile";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
@@ -22,6 +22,8 @@ import { SlikOjkCard } from "./SlikOjkCard";
 import { InstallmentCard } from "./InstallmentCard";
 import { CreditScoringCard } from "./CreditScoringCard";
 import { MatchingCard } from "./MatchingCard";
+import { PreviewDocsCard } from "./PreviewDocsCard";
+import { AgunanCalcCard } from "./AgunanCalcCard";
 
 import { EMPLOYMENT_AGREEMENT } from "@/data/profileFixtures";
 import { SLIP_GAJI } from "@/data/ocrFixtures";
@@ -44,6 +46,8 @@ interface DocumentDashboardProps {
   slik?: SlikReport;
   /** Borrower application data from the Data Diri form. */
   userInput?: UserInput;
+  /** Uploaded documents for the preview section. */
+  previewDocs?: PreviewDoc[];
 }
 
 /**
@@ -61,7 +65,7 @@ interface DocumentDashboardProps {
  * OCR success, SLIK on the bureau pull, installment on the THP step. The panel
  * scrolls internally within the fixed canvas.
  */
-export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput }: DocumentDashboardProps) {
+export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
 
   const ocrStatus = statusOf("ocr");
@@ -151,6 +155,9 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
         />
       </div>
 
+      {/* PERHITUNGAN AGUNAN (NPW × LTV) — di atas Calculate Installment */}
+      <AgunanCalcCard status={thpStatus} agunan={agunan} uangMuka={userInput?.uangMuka} />
+
       {/* Row 3: CALCULATE INSTALLMENT PAYMENTS | CREDIT SCORING */}
       <div className="grid grid-cols-[1.7fr_1fr] items-stretch gap-3">
         <InstallmentCard
@@ -200,6 +207,9 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
         totalAngsuran={slikTotalAngsuran}
         score={creditResult.score}
       />
+
+      {/* PREVIEW DOKUMEN — dokumen terupload, di-rename sesuai klasifikasi */}
+      <PreviewDocsCard docs={previewDocs ?? []} />
     </div>
   );
 }

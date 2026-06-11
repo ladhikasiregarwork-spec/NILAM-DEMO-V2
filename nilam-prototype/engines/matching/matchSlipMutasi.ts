@@ -13,14 +13,20 @@ export interface MatchTxn {
 export interface MonthlyRecap {
   key: string; // "MM/YY"
   bulan: string; // "Apr 2026"
-  totalGaji: number;
-  totalThr: number;
-  totalBonus: number;
-  /** Total income (Total Upah) from the salary slip of that month. */
-  totalIncomeSlip?: number;
-  /** Total deductions from the salary slip of that month. */
-  totalPotonganSlip?: number;
-  /** Raw payment date printed on the slip ("February 2026"), when matched. */
+  // ── From the bank statement (mutasi), classified credits ──
+  gajiMutasi: number;
+  thrMutasi: number;
+  bonusMutasi: number;
+  // ── From the salary slip of that month ──
+  /** Take-home pay (THP) from the slip. */
+  gajiSlip?: number;
+  thrSlip?: number;
+  bonusSlip?: number;
+  /** Total Upah (gross income) from the slip. */
+  incomeSlip?: number;
+  /** Net deductions = Total Potongan − potongan(bonus + THR + cuti). */
+  potonganNet?: number;
+  /** Raw payment date printed on the slip ("25.05.2026"), when matched. */
   tglBayarSlip?: string;
 }
 
@@ -97,7 +103,7 @@ export function buildMatch(mutasi?: MutasiExtract, slip?: SlipGajiExtract): Matc
   const ensure = (key: string): MonthlyRecap => {
     let r = map.get(key);
     if (!r) {
-      r = { key, bulan: monthLabel(key), totalGaji: 0, totalThr: 0, totalBonus: 0 };
+      r = { key, bulan: monthLabel(key), gajiMutasi: 0, thrMutasi: 0, bonusMutasi: 0 };
       map.set(key, r);
     }
     return r;
@@ -105,16 +111,22 @@ export function buildMatch(mutasi?: MutasiExtract, slip?: SlipGajiExtract): Matc
 
   for (const t of txns) {
     const r = ensure(mutasiMonthKey(t.tanggal));
-    r.totalGaji += t.gaji;
-    r.totalThr += t.thr;
-    r.totalBonus += t.bonus;
+    r.gajiMutasi += t.gaji;
+    r.thrMutasi += t.thr;
+    r.bonusMutasi += t.bonus;
   }
   for (const rec of slip?.records ?? []) {
     const key = slipMonthKey(rec.tanggalPembayaran);
     if (!key) continue;
     const r = ensure(key);
-    if (rec.totalUpah != null) r.totalIncomeSlip = (r.totalIncomeSlip ?? 0) + rec.totalUpah;
-    if (rec.totalPotongan != null) r.totalPotonganSlip = (r.totalPotonganSlip ?? 0) + rec.totalPotongan;
+    if (rec.thp != null) r.gajiSlip = (r.gajiSlip ?? 0) + rec.thp; // THP ↔ gaji mutasi
+    if (rec.thr != null) r.thrSlip = (r.thrSlip ?? 0) + rec.thr;
+    if (rec.bonus != null) r.bonusSlip = (r.bonusSlip ?? 0) + rec.bonus;
+    if (rec.totalUpah != null) r.incomeSlip = (r.incomeSlip ?? 0) + rec.totalUpah;
+    if (rec.totalPotongan != null) {
+      const net = rec.totalPotongan - (rec.potonganBonus ?? 0) - (rec.potonganThr ?? 0) - (rec.potonganCuti ?? 0);
+      r.potonganNet = (r.potonganNet ?? 0) + net;
+    }
     if (rec.tanggalPembayaran) r.tglBayarSlip = rec.tanggalPembayaran;
   }
 

@@ -18,6 +18,10 @@ export interface SlipRecord {
   thp?: number;
   thr?: number;
   bonus?: number;
+  /** Deduction line items for bonus / THR / cuti (to net out of potongan). */
+  potonganBonus?: number;
+  potonganThr?: number;
+  potonganCuti?: number;
   fileName?: string;
 }
 
@@ -113,6 +117,15 @@ export interface ClassifyResult {
   confidence: string;
   /** KTP fields extracted in the same OCR pass (avoids a second /extract-ktp). */
   extract?: KtpExtract;
+}
+
+/** An uploaded document kept for preview (blob URL + its classified type). */
+export interface PreviewDoc {
+  type: ClassifyLabel;
+  /** Object URL (URL.createObjectURL) for viewing. */
+  url: string;
+  /** Original uploaded filename (for the extension). */
+  originalName: string;
 }
 
 /** Response envelope returned by the proxy routes to the browser. */

@@ -621,8 +621,21 @@ def extract_slip_fields(text: str) -> dict:
             r"[:.]?\s*(?:Rp)?\s*([\d.,]+)",
             r"(?:Amount\s*transfer\w*(?:\s*into)?|Jumlah\s*di\s*transfer)[^\d]{0,50}([\d.,]{5,})",
         )
+    # Specific deduction line items (so the recap can net them out).
+    def _sum_potongan(*keywords: str) -> float:
+        total = 0.0
+        for kw in keywords:
+            for m in re.finditer(rf"Potongan[^\n]*?{kw}[^\n]*?([\d.,]{{4,}})", text, re.IGNORECASE):
+                total += _money(m.group(1))
+        return round(total, 2)
+
+    potongan_bonus = _sum_potongan("bonus")
+    potongan_thr = _sum_potongan("thr", r"hari\s*raya")
+    potongan_cuti = _sum_potongan("cuti")
     return {"tanggalPembayaran": tgl, "totalUpah": upah, "totalPotongan": potongan,
-            "thp": thp, "thr": thr, "bonus": bonus}
+            "thp": thp, "thr": thr, "bonus": bonus,
+            "potonganBonus": potongan_bonus, "potonganThr": potongan_thr,
+            "potonganCuti": potongan_cuti}
 
 
 def extract_sk_fields(text: str) -> dict:
