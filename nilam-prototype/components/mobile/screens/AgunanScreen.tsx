@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Link2, PencilLine, Loader2, Sparkles, AlertTriangle, MapPin, Home, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link2, PencilLine, Loader2, ShieldCheck, Sparkles, AlertTriangle, MapPin, Home, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
 import type { AgunanData } from "@/types/agunan";
@@ -77,6 +77,12 @@ export function AgunanScreen({
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  // Brief prescreening check before the agunan input is shown.
+  const [prescreen, setPrescreen] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setPrescreen(false), 1800);
+    return () => clearTimeout(t);
+  }, []);
 
   const numField = (patch: Partial<AgunanData>) => onSetAgunan(patch as AgunanData);
   const canSubmit = !!agunan?.harga;
@@ -94,6 +100,23 @@ export function AgunanScreen({
     onClear();
     setUrl("");
     setError(undefined);
+  }
+
+  if (prescreen) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
+        <div className="relative flex h-14 w-14 items-center justify-center">
+          <Loader2 size={56} className="absolute animate-spin text-bri-blue/40" strokeWidth={1.5} />
+          <ShieldCheck size={24} className="text-bri-blue" strokeWidth={2} />
+        </div>
+        <div className="text-center">
+          <p className="text-[12px] font-bold text-bri-ink">Pengecekan Prescreening…</p>
+          <p className="mt-1 text-[9px] leading-relaxed text-bri-muted">
+            Memverifikasi kelayakan awal sebelum input data agunan.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

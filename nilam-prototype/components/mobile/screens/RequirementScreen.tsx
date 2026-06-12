@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/cn";
 import { DOCUMENTS } from "@/data/documents";
 import type { DocumentId } from "@/types/documents";
-import type { ClassifyResult, ClassifyLabel } from "@/types/ocrExtract";
+import type { ClassifyResult } from "@/types/ocrExtract";
 
 interface RequirementScreenProps {
   uploads: Record<string, boolean>;
@@ -39,15 +39,6 @@ const DOC_ICONS: Record<DocumentId, React.ComponentType<{ size?: number; classNa
   sk_perusahaan: FileSignature,
 };
 
-const LABEL_NAME: Record<ClassifyLabel, string> = {
-  ktp: "KTP",
-  kk: "KK",
-  slip: "Slip Gaji",
-  mutasi: "Mutasi Rekening",
-  sk: "SK Perusahaan",
-  unknown: "Tidak dikenali",
-};
-
 /**
  * RequirementScreen — SATU menu upload untuk semua dokumen (KTP, KK, Slip Gaji,
  * SK, Mutasi). Tiap file diklasifikasi otomatis oleh classifier lokal, lalu
@@ -65,7 +56,6 @@ export function RequirementScreen({
 }: RequirementScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [results, setResults] = useState<ClassifyResult[]>([]);
 
   const uploadedCount = DOCUMENTS.filter((d) => uploads[d.id]).length;
   const allUploaded = uploadedCount === DOCUMENTS.length;
@@ -80,14 +70,11 @@ export function RequirementScreen({
     setLoading(false);
     if (!res.ok) {
       setError(res.error || "Gagal memproses dokumen");
-      return;
     }
-    setResults((prev) => [...prev, ...(res.results ?? [])]);
   }
 
   function resetUploads() {
     clearUploads();
-    setResults([]);
     setError(undefined);
   }
 
@@ -135,18 +122,6 @@ export function RequirementScreen({
         <p className="mt-1 flex items-center gap-1 text-[8.5px] font-medium text-red-500">
           <AlertTriangle size={10} /> {error}
         </p>
-      )}
-      {results.length > 0 && (
-        <div className="mt-1.5 flex flex-col gap-0.5 rounded-bubble bg-bri-bg/70 px-2.5 py-1.5">
-          {results.map((r, i) => (
-            <div key={`${r.fileName}-${i}`} className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 truncate text-[8.5px] text-bri-ink">{r.fileName}</span>
-              <span className={cn("shrink-0 rounded-pill px-1.5 py-px text-[7.5px] font-semibold", r.type === "unknown" ? "bg-amber-100 text-amber-700" : "bg-bri-navy/10 text-bri-navy")}>
-                {LABEL_NAME[r.type]}
-              </span>
-            </div>
-          ))}
-        </div>
       )}
 
       {/* Checklist */}

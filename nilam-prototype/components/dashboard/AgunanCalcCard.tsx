@@ -136,7 +136,7 @@ export function AgunanCalcCard({ status, agunan, uangMuka, npw: npwProp, klas, s
             <Row label="LTV" value={pct(ltv)} />
             <Row label="Plafon Agunan (NPW × LTV)" value={formatRupiah(plafonAgunan)} strong className="text-bri-navy" />
             <div className="my-0.5 border-t border-bri-line" />
-            <Row label="Kebutuhan (Harga − DP)" value={formatRupiah(kebutuhan)} />
+            <Row label="Pengajuan Pembiayaan (Harga − DP)" value={formatRupiah(kebutuhan)} />
             {cukup ? (
               <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-pill bg-emerald-50 px-2 py-0.5 text-[8.5px] font-semibold text-emerald-600">
                 <CheckCircle2 size={10} /> Plafon agunan mencukupi
