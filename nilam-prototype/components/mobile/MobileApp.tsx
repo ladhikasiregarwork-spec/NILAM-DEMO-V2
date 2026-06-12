@@ -46,10 +46,13 @@ interface MobileAppProps {
   setUserInput: (patch: Partial<UserInput>) => void;
   /** Monthly payment capacity (gaji + THR/12 + bonus/12 − SLIK). */
   kemampuan: number;
+  /** Collateral plafond cap = NPW × LTV. */
+  plafonAgunan?: number;
   agunan?: AgunanData;
   start: () => void;
   next: () => void;
   goBack: () => void;
+  editAgunan: () => void;
   classifyAndUpload: (
     files: File[],
   ) => Promise<{ ok: boolean; results?: ClassifyResult[]; error?: string }>;
@@ -79,10 +82,12 @@ export function MobileApp({
   userInput,
   setUserInput,
   kemampuan,
+  plafonAgunan,
   agunan,
   start,
   next,
   goBack,
+  editAgunan,
   classifyAndUpload,
   clearUploads,
   fetchAgunanFromLink,
@@ -168,12 +173,14 @@ export function MobileApp({
             uangMuka={userInput.uangMuka}
             jangkaWaktu={userInput.jangkaWaktu}
             kemampuan={kemampuan}
+            plafonAgunan={plafonAgunan}
             onAccept={next}
+            onEditAgunan={editAgunan}
             canGoBack={false}
           />
         );
       case "disburse":
-        return <DisburseScreen key="disburse" agunan={agunan} uangMuka={userInput.uangMuka} onFinish={reset} />;
+        return <DisburseScreen key="disburse" agunan={agunan} uangMuka={userInput.uangMuka} plafonAgunan={plafonAgunan} onFinish={reset} />;
       default:
         return (
           <OpeningScreen

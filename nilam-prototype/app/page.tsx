@@ -5,6 +5,7 @@ import { MobileApp } from "@/components/mobile/MobileApp";
 import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
 import { useNilamFlow } from "@/hooks/useNilamFlow";
 import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
+import { ltvFromKlas } from "@/data/ltv";
 
 export default function Page() {
   const {
@@ -21,12 +22,16 @@ export default function Page() {
     start,
     next,
     goBack,
+    editAgunan,
     classifyAndUpload,
     clearUploads,
     fetchAgunanFromLink,
     setAgunan,
     clearAgunan,
     slik,
+    npw,
+    agunanKlas,
+    setAgunanKlas,
     userInput,
     setUserInput,
     previewDocs,
@@ -41,6 +46,9 @@ export default function Page() {
     _income.bonusTahunan,
     slik?.totalAngsuran ?? 0,
   );
+  // Collateral plafond cap = NPW × LTV (shared classification).
+  const plafonAgunan =
+    agunan?.harga != null ? Math.round((npw ?? agunan.harga) * ltvFromKlas(agunanKlas, agunan.harga)) : undefined;
 
   return (
     <AppShell
@@ -56,8 +64,10 @@ export default function Page() {
           userInput={userInput}
           setUserInput={setUserInput}
           kemampuan={kemampuan}
+          plafonAgunan={plafonAgunan}
           agunan={agunan}
           start={start}
+          editAgunan={editAgunan}
           next={next}
           goBack={goBack}
           classifyAndUpload={classifyAndUpload}
@@ -80,6 +90,9 @@ export default function Page() {
           slik={slik}
           userInput={userInput}
           previewDocs={previewDocs}
+          npw={npw}
+          agunanKlas={agunanKlas}
+          setAgunanKlas={setAgunanKlas}
         />
       }
     />

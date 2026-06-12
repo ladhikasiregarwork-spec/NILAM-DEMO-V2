@@ -16,24 +16,24 @@ interface MatchingCardProps {
 }
 
 const TXN_GRID = "grid grid-cols-[60px_1fr_1fr_1fr_2.2fr] items-center gap-1.5";
-const REC_GRID = "grid grid-cols-[58px_repeat(8,1fr)_52px] items-center gap-1";
+// Bulan · 8 editable cols · Total Income Mutasi (computed) · Status
+const REC_GRID = "grid grid-cols-[56px_repeat(9,1fr)_50px] items-center gap-1";
 
 type Field =
-  | "gajiSlip" | "gajiMutasi" | "thrSlip" | "thrMutasi"
-  | "bonusSlip" | "bonusMutasi" | "incomeSlip" | "potonganNet";
-const FIELDS: Field[] = [
-  "gajiSlip", "gajiMutasi", "thrSlip", "thrMutasi", "bonusSlip", "bonusMutasi", "incomeSlip", "potonganNet",
-];
+  | "incomeSlip" | "potonganNet" | "gajiSlip" | "thrSlip" | "bonusSlip"
+  | "gajiMutasi" | "thrMutasi" | "bonusMutasi";
+
 const COLS: { f: Field; label: string }[] = [
-  { f: "gajiSlip", label: "Gaji Slip" },
-  { f: "gajiMutasi", label: "Gaji Mut." },
-  { f: "thrSlip", label: "THR Slip" },
-  { f: "thrMutasi", label: "THR Mut." },
-  { f: "bonusSlip", label: "Bonus Slip" },
-  { f: "bonusMutasi", label: "Bonus Mut." },
   { f: "incomeSlip", label: "Income Slip" },
-  { f: "potonganNet", label: "Potongan" },
+  { f: "potonganNet", label: "Potongan Slip" },
+  { f: "gajiSlip", label: "Gaji Slip" },
+  { f: "thrSlip", label: "THR Slip" },
+  { f: "bonusSlip", label: "Bonus Slip" },
+  { f: "gajiMutasi", label: "Gaji Mut." },
+  { f: "thrMutasi", label: "THR Mut." },
+  { f: "bonusMutasi", label: "Bonus Mut." },
 ];
+const FIELDS: Field[] = COLS.map((c) => c.f);
 
 /** Slip ↔ mutasi counterpart, for the green/red match colouring. */
 const PAIR: Partial<Record<Field, Field>> = {
@@ -43,11 +43,10 @@ const PAIR: Partial<Record<Field, Field>> = {
 };
 
 /**
- * MatchingCard — "Matching Salary Slip & Bank Statement". Income transactions
- * from the bank statement (Gaji/THR/Bonus) and a per-month recap comparing SLIP
- * vs MUTASI side by side (gaji/THR/bonus), the slip Income, and net deductions
- * (Total Potongan − potongan bonus/THR/cuti). Amounts editable; Status flags a
- * row that was edited, or whether slip ↔ mutasi gaji match.
+ * MatchingCard — "Matching Salary Slip & Bank Statement". Per-month recap
+ * (Income/Potongan/Gaji/THR/Bonus from the SLIP, then Gaji/THR/Bonus from the
+ * MUTASI + total mutasi income) above the raw income transactions. Amounts
+ * editable; green/red flags whether slip matches mutasi; Status = Edited.
  */
 export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProps) {
   const ready = status === "success" && !missing;
@@ -63,9 +62,6 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
       const e = edits[`${key}|${f}`];
       return e != null && e !== (r[f] ?? 0);
     });
-
-  // Green when the slip value matches its mutasi counterpart (±5%), red when it
-  // doesn't, neutral when one side is missing / not a paired column.
   const matchColor = (field: Field, key: string, r: MonthlyRecap): string => {
     const other = PAIR[field];
     if (!other) return "text-bri-ink";
@@ -99,7 +95,64 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Transactions */}
+          {/* Monthly recap — slip vs mutasi, editable (ATAS) */}
+          <div>
+            <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
+              Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· slip vs mutasi · nominal bisa diedit</span>
+            </p>
+            <div className="overflow-x-auto scroll-thin">
+              <div className="min-w-[880px] overflow-hidden rounded-lg border border-bri-line/70">
+                <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 py-1 text-[6.5px] font-semibold uppercase tracking-[0.02em] text-bri-muted")}>
+                  <span>Bulan</span>
+                  {COLS.map((c) => <span key={c.f} className="text-right">{c.label}</span>)}
+                  <span className="text-right">Tot. Income Mut.</span>
+                  <span className="text-center">Status</span>
+                </div>
+                {recaps.map((r) => {
+                  const edited = isEdited(r.key, r);
+                  const totMut =
+                    (eff(r.key, "gajiMutasi", r.gajiMutasi) ?? 0) +
+                    (eff(r.key, "thrMutasi", r.thrMutasi) ?? 0) +
+                    (eff(r.key, "bonusMutasi", r.bonusMutasi) ?? 0);
+                  return (
+                    <div key={r.key} className={cn(REC_GRID, "border-t border-bri-line/50 px-2 py-1 text-[8.5px]")}>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium text-bri-ink">{r.bulan}</span>
+                        {r.tglBayarSlip && (
+                          <span className="truncate text-[6px] text-bri-muted" title={r.tglBayarSlip}>slip: {r.tglBayarSlip}</span>
+                        )}
+                      </span>
+                      {FIELDS.map((f) => (
+                        <input
+                          key={f}
+                          type="number"
+                          value={eff(r.key, f, r[f]) ?? ""}
+                          onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
+                          className={cn(
+                            "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
+                            matchColor(f, r.key, r),
+                          )}
+                        />
+                      ))}
+                      <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-navy">{formatRupiah(totMut)}</span>
+                      <span className="flex justify-center">
+                        <span className={cn("rounded-pill px-1.5 py-px text-[7px] font-semibold", edited ? "bg-amber-100 text-amber-700" : "bg-bri-bg text-bri-muted")}>
+                          {edited ? "Edited" : "Non-edited"}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="mt-0.5 text-[7px] text-bri-muted/70">
+              Income/Potongan/Gaji(THP)/THR/Bonus dari slip · Gaji/THR/Bonus + Tot. Income dari mutasi.
+              <span className="text-emerald-600"> Hijau</span> = slip cocok dengan mutasi,
+              <span className="text-red-500"> merah</span> = selisih · Status “Edited” bila diubah.
+            </p>
+          </div>
+
+          {/* Income transactions (BAWAH) */}
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Transaksi Pemasukan (dari Mutasi)
@@ -124,57 +177,6 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Monthly recap — slip vs mutasi, editable */}
-          <div>
-            <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
-              Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· slip vs mutasi · nominal bisa diedit</span>
-            </p>
-            <div className="overflow-x-auto scroll-thin">
-              <div className="min-w-[760px] overflow-hidden rounded-lg border border-bri-line/70">
-                <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 py-1 text-[6.5px] font-semibold uppercase tracking-[0.02em] text-bri-muted")}>
-                  <span>Bulan</span>
-                  {COLS.map((c) => <span key={c.f} className="text-right">{c.label}</span>)}
-                  <span className="text-center">Status</span>
-                </div>
-                {recaps.map((r) => {
-                  const edited = isEdited(r.key, r);
-                  return (
-                    <div key={r.key} className={cn(REC_GRID, "border-t border-bri-line/50 px-2 py-1 text-[8.5px]")}>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="font-medium text-bri-ink">{r.bulan}</span>
-                        {r.tglBayarSlip && (
-                          <span className="truncate text-[6px] text-bri-muted" title={r.tglBayarSlip}>slip: {r.tglBayarSlip}</span>
-                        )}
-                      </span>
-                      {FIELDS.map((f) => (
-                        <input
-                          key={f}
-                          type="number"
-                          value={eff(r.key, f, r[f]) ?? ""}
-                          onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
-                          className={cn(
-                            "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
-                            matchColor(f, r.key, r),
-                          )}
-                        />
-                      ))}
-                      <span className="flex justify-center">
-                        <span className={cn("rounded-pill px-1.5 py-px text-[7px] font-semibold", edited ? "bg-amber-100 text-amber-700" : "bg-bri-bg text-bri-muted")}>
-                          {edited ? "Edited" : "Non-edited"}
-                        </span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <p className="mt-0.5 text-[7px] text-bri-muted/70">
-              Gaji Slip = THP slip · Income = Total Upah · Potongan = Total Potongan − potongan(bonus+THR+cuti).
-              <span className="text-emerald-600"> Hijau</span> = slip cocok dengan mutasi,
-              <span className="text-red-500"> merah</span> = selisih · Status “Edited” bila nominal diubah.
-            </p>
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import type { AgunanData } from "@/types/agunan";
 import type { SlikReport } from "@/types/profile";
 import type { UserInput } from "@/types/userInput";
 import { usiaDariKtp } from "@/lib/usia";
+import { type AgunanKlasifikasi, DEFAULT_KLASIFIKASI } from "@/data/ltv";
 import type { EventListener } from "@/engines/orchestrator/events";
 import { planFlow } from "@/engines/persona/personaEngine";
 import { WorkflowOrchestrator } from "@/engines/orchestrator/workflowOrchestrator";
@@ -40,6 +41,10 @@ export interface NilamState {
   agunan?: AgunanData;
   /** SLIK report fetched by NIK (from the SLIK CSV). */
   slik?: SlikReport;
+  /** NPW (Nilai Pasar Wajar) from the appraisal model, by agunan. */
+  npw?: number;
+  /** Collateral classification (drives LTV), shared by the dashboard + offer. */
+  agunanKlas: AgunanKlasifikasi;
   /** Borrower application data (prefilled from OCR, editable on Data Diri). */
   userInput: UserInput;
   /** Uploaded documents kept for preview (blob URLs + classified type). */
@@ -67,6 +72,8 @@ export type NilamAction =
   | { type: "setAgunan"; data: AgunanData }
   | { type: "clearAgunan" }
   | { type: "setSlik"; data: SlikReport }
+  | { type: "setNpw"; value: number | undefined }
+  | { type: "setAgunanKlas"; patch: Partial<AgunanKlasifikasi> }
   | { type: "setUserInput"; patch: Partial<UserInput> }
   | { type: "prefillUserInput"; data: Partial<UserInput> }
   | { type: "addPreviewDocs"; docs: PreviewDoc[] }
@@ -90,6 +97,7 @@ export function initialState(): NilamState {
     docCounts: {},
     userInput: {},
     previewDocs: [],
+    agunanKlas: DEFAULT_KLASIFIKASI,
   };
 }
 
@@ -111,6 +119,7 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     docCounts: {},
     userInput: {},
     previewDocs: [],
+    agunanKlas: DEFAULT_KLASIFIKASI,
   };
 }
 
@@ -213,7 +222,13 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
       return { ...state, agunan: { ...state.agunan, ...action.data } };
 
     case "clearAgunan":
-      return { ...state, agunan: undefined };
+      return { ...state, agunan: undefined, npw: undefined };
+
+    case "setNpw":
+      return { ...state, npw: action.value };
+
+    case "setAgunanKlas":
+      return { ...state, agunanKlas: { ...state.agunanKlas, ...action.patch } };
 
     case "setSlik":
       return { ...state, slik: action.data };
@@ -296,6 +311,13 @@ export function useNilamFlow() {
   const goBack = useCallback(() => {
     cancelOrchestrator();
     dispatch({ type: "goBack" });
+  }, [cancelOrchestrator]);
+
+  // Jump straight back to the Agunan step (e.g. from the offer) to swap the
+  // collateral, then re-submit to re-run scoring + offering.
+  const editAgunan = useCallback(() => {
+    cancelOrchestrator();
+    dispatch({ type: "goTo", step: "agunan" });
   }, [cancelOrchestrator]);
 
   const setJointAnswer = useCallback((ans: "ya" | "tidak") => {
@@ -489,6 +511,10 @@ export function useNilamFlow() {
     dispatch({ type: "setUserInput", patch });
   }, []);
 
+  const setAgunanKlas = useCallback((patch: Partial<AgunanKlasifikasi>) => {
+    dispatch({ type: "setAgunanKlas", patch });
+  }, []);
+
   // Pull the SLIK report (Excel by NIK) as soon as the KTP NIK is known.
   useEffect(() => {
     const nik = state.ocr.ktp?.nik;
@@ -507,6 +533,39 @@ export function useNilamFlow() {
       cancelled = true;
     };
   }, [state.ocr.ktp?.nik, state.slik]);
+
+  // Appraise NPW (Nilai Pasar Wajar) from the agunan whenever its size/location
+  // changes (via the house_fair_market_value model).
+  useEffect(() => {
+    const a = state.agunan;
+    if (!a?.luasTanah || a.luasTanah <= 0) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/npw", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            luasTanah: a.luasTanah,
+            luasBangunan: a.luasBangunan,
+            kodepos: a.kodepos,
+            kelurahan: a.kelurahan,
+          }),
+        });
+        const j = await r.json().catch(() => null);
+        if (!cancelled && r.ok && j?.ok && j.fairValue != null) {
+          dispatch({ type: "setNpw", value: Math.round(j.fairValue) });
+        }
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.agunan?.luasTanah, state.agunan?.luasBangunan, state.agunan?.kelurahan, state.agunan?.kodepos]);
 
   // Prefill the Data Diri form from KTP/KK OCR (only fields not yet edited).
   useEffect(() => {
@@ -634,6 +693,9 @@ export function useNilamFlow() {
     docCounts: state.docCounts,
     agunan: state.agunan,
     slik: state.slik,
+    npw: state.npw,
+    agunanKlas: state.agunanKlas,
+    setAgunanKlas,
     userInput: state.userInput,
     setUserInput,
     previewDocs: state.previewDocs,
@@ -643,6 +705,7 @@ export function useNilamFlow() {
     start,
     next,
     goBack,
+    editAgunan,
     setUpload,
     uploadOcrDocument,
     classifyAndUpload,

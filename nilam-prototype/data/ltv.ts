@@ -77,3 +77,24 @@ export function ltvBaru(tier: DeveloperTier, prop: PropertiTipe, ukuran: UkuranT
 export function ltvLama(jenis: RumahLamaJenis, harga?: number): number {
   return jenis === "refinancing" ? LTV_REFINANCING : LTV_SECONDARY[rangeHarga(harga)];
 }
+
+/** The editable collateral classification, shared across the dashboard + offer. */
+export interface AgunanKlasifikasi {
+  kategori: AgunanKategori;
+  tier: DeveloperTier;
+  prop: PropertiTipe;
+  ukuran: UkuranTipe;
+  jenisLama: RumahLamaJenis;
+}
+
+export const DEFAULT_KLASIFIKASI: AgunanKlasifikasi = {
+  kategori: "baru",
+  tier: "tier1",
+  prop: "tapak",
+  ukuran: "gt70",
+  jenisLama: "secondary",
+};
+
+export function ltvFromKlas(k: AgunanKlasifikasi, harga?: number): number {
+  return k.kategori === "baru" ? ltvBaru(k.tier, k.prop, k.ukuran) : ltvLama(k.jenisLama, harga);
+}

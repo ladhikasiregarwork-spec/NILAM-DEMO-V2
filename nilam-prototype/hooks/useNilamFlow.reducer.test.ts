@@ -6,6 +6,7 @@ import { DEFAULT_PERSONA } from "@/data/personas";
 import type { PersonaConfig, FlowStep } from "@/types/flow";
 import type { OrchestrationEvent } from "@/types/orchestration";
 import type { CustomerIncome } from "@/types/income";
+import { DEFAULT_KLASIFIKASI } from "@/data/ltv";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -272,6 +273,7 @@ describe("nilamReducer — goBack", () => {
       docCounts: {},
       userInput: {},
       previewDocs: [],
+      agunanKlas: DEFAULT_KLASIFIKASI,
     };
 
     const after = nilamReducer(stateAtProcessing, { type: "goBack" });
@@ -302,6 +304,7 @@ describe("nilamReducer — goBack", () => {
       docCounts: {},
       userInput: {},
       previewDocs: [],
+      agunanKlas: DEFAULT_KLASIFIKASI,
     };
 
     const after = nilamReducer(stateAtAnalyst, { type: "goBack" });
@@ -412,6 +415,7 @@ describe("nilamReducer — reset", () => {
       docCounts: {},
       userInput: {},
       previewDocs: [],
+      agunanKlas: DEFAULT_KLASIFIKASI,
     };
 
     const after = nilamReducer(populated, { type: "reset" });

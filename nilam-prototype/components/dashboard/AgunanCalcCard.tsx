@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { Home, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
 import { computeNpw } from "@/engines/npw/npwModel";
 import {
-  ltvBaru, ltvLama, rangeHarga,
+  ltvFromKlas, rangeHarga,
   TIER_LABEL, PROPERTI_LABEL, UKURAN_LABEL, LAMA_LABEL, RANGE_LABEL,
-  type AgunanKategori, type DeveloperTier, type PropertiTipe, type UkuranTipe, type RumahLamaJenis,
+  type AgunanKlasifikasi, type AgunanKategori, type DeveloperTier, type PropertiTipe, type UkuranTipe, type RumahLamaJenis,
 } from "@/data/ltv";
 import type { NodeStatus } from "@/types/orchestration";
 import type { AgunanData } from "@/types/agunan";
@@ -18,6 +17,11 @@ interface AgunanCalcCardProps {
   agunan?: AgunanData;
   /** Uang muka (down payment) from the Data Diri form. */
   uangMuka?: number;
+  /** NPW from the appraisal model (falls back to the harga proxy when absent). */
+  npw?: number;
+  /** Collateral classification (shared state). */
+  klas: AgunanKlasifikasi;
+  setKlas: (patch: Partial<AgunanKlasifikasi>) => void;
 }
 
 const pct = (r: number) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "").replace(".", ",")}%`;
@@ -34,22 +38,16 @@ function Row({ label, value, strong, className }: { label: string; value: string
 
 /**
  * AgunanCalcCard — "Perhitungan Agunan". Plafon dari agunan = NPW (Nilai Pasar
- * Wajar) × LTV, where LTV is looked up from an editable classification (rumah
- * baru: tier/properti/tipe; rumah lama: secondary/refinancing). Compared with
- * the financing need (harga − DP); if the need exceeds the collateral plafon,
- * the shortfall is the extra down payment the nasabah must add.
+ * Wajar) × LTV (LTV dari klasifikasi editable). Dibandingkan dengan kebutuhan
+ * (harga − DP); kekurangannya = tambahan DP. Klasifikasi disimpan di state
+ * bersama agar penawaran memakai LTV yang sama.
  */
-export function AgunanCalcCard({ status, agunan, uangMuka }: AgunanCalcCardProps) {
+export function AgunanCalcCard({ status, agunan, uangMuka, npw: npwProp, klas, setKlas }: AgunanCalcCardProps) {
   const ready = status === "success";
-  const [kategori, setKategori] = useState<AgunanKategori>("baru");
-  const [tier, setTier] = useState<DeveloperTier>("tier1");
-  const [prop, setProp] = useState<PropertiTipe>("tapak");
-  const [ukuran, setUkuran] = useState<UkuranTipe>("gt70");
-  const [jenisLama, setJenisLama] = useState<RumahLamaJenis>("secondary");
-
   const harga = agunan?.harga;
-  const npw = computeNpw(agunan).value ?? harga ?? 0;
-  const ltv = kategori === "baru" ? ltvBaru(tier, prop, ukuran) : ltvLama(jenisLama, harga);
+  const npwFromModel = npwProp != null;
+  const npw = npwProp ?? computeNpw(agunan).value ?? harga ?? 0;
+  const ltv = ltvFromKlas(klas, harga);
   const plafonAgunan = Math.round(npw * ltv);
   const dp = uangMuka ?? 0;
   const kebutuhan = harga != null ? Math.max(0, harga - dp) : 0;
@@ -82,32 +80,32 @@ export function AgunanCalcCard({ status, agunan, uangMuka }: AgunanCalcCardProps
                 <button
                   key={k}
                   type="button"
-                  onClick={() => setKategori(k)}
-                  className={cn("rounded-lg border px-2 py-1 text-[9px] font-semibold transition-all", kategori === k ? "border-bri-blue bg-bri-blue/5 text-bri-blue" : "border-bri-line text-bri-muted hover:border-bri-blue/50")}
+                  onClick={() => setKlas({ kategori: k })}
+                  className={cn("rounded-lg border px-2 py-1 text-[9px] font-semibold transition-all", klas.kategori === k ? "border-bri-blue bg-bri-blue/5 text-bri-blue" : "border-bri-line text-bri-muted hover:border-bri-blue/50")}
                 >
                   {k === "baru" ? "Rumah Baru" : "Rumah Lama"}
                 </button>
               ))}
             </div>
 
-            {kategori === "baru" ? (
+            {klas.kategori === "baru" ? (
               <>
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[7.5px] font-semibold uppercase tracking-[0.06em] text-bri-muted">Developer</span>
-                  <select className={sel} value={tier} onChange={(e) => setTier(e.target.value as DeveloperTier)}>
+                  <select className={sel} value={klas.tier} onChange={(e) => setKlas({ tier: e.target.value as DeveloperTier })}>
                     {(Object.keys(TIER_LABEL) as DeveloperTier[]).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[7.5px] font-semibold uppercase tracking-[0.06em] text-bri-muted">Properti</span>
-                  <select className={sel} value={prop} onChange={(e) => setProp(e.target.value as PropertiTipe)}>
+                  <select className={sel} value={klas.prop} onChange={(e) => setKlas({ prop: e.target.value as PropertiTipe })}>
                     {(Object.keys(PROPERTI_LABEL) as PropertiTipe[]).map((p) => <option key={p} value={p}>{PROPERTI_LABEL[p]}</option>)}
                   </select>
                 </label>
-                {prop !== "ruko" && (
+                {klas.prop !== "ruko" && (
                   <label className="flex flex-col gap-0.5">
                     <span className="text-[7.5px] font-semibold uppercase tracking-[0.06em] text-bri-muted">Tipe</span>
-                    <select className={sel} value={ukuran} onChange={(e) => setUkuran(e.target.value as UkuranTipe)}>
+                    <select className={sel} value={klas.ukuran} onChange={(e) => setKlas({ ukuran: e.target.value as UkuranTipe })}>
                       {(Object.keys(UKURAN_LABEL) as UkuranTipe[]).map((u) => <option key={u} value={u}>{UKURAN_LABEL[u]}</option>)}
                     </select>
                   </label>
@@ -117,12 +115,12 @@ export function AgunanCalcCard({ status, agunan, uangMuka }: AgunanCalcCardProps
               <>
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[7.5px] font-semibold uppercase tracking-[0.06em] text-bri-muted">Jenis</span>
-                  <select className={sel} value={jenisLama} onChange={(e) => setJenisLama(e.target.value as RumahLamaJenis)}>
+                  <select className={sel} value={klas.jenisLama} onChange={(e) => setKlas({ jenisLama: e.target.value as RumahLamaJenis })}>
                     {(Object.keys(LAMA_LABEL) as RumahLamaJenis[]).map((j) => <option key={j} value={j}>{LAMA_LABEL[j]}</option>)}
                   </select>
                 </label>
                 <div className="rounded-lg bg-bri-bg/50 px-2 py-1 text-[8px] text-bri-muted">
-                  {jenisLama === "secondary" ? (
+                  {klas.jenisLama === "secondary" ? (
                     <>Rentang harga: <b className="text-bri-ink">{RANGE_LABEL[rangeHarga(harga)]}</b> → LTV {pct(ltv)}</>
                   ) : (
                     <>Refinancing → LTV tetap <b className="text-bri-ink">{pct(ltv)}</b></>
@@ -134,8 +132,8 @@ export function AgunanCalcCard({ status, agunan, uangMuka }: AgunanCalcCardProps
 
           {/* Calculation */}
           <div className="flex flex-col justify-center gap-1 rounded-lg bg-bri-bg/40 px-3 py-2">
-            <Row label="Nilai Pasar Wajar (NPW)" value={formatRupiah(npw)} />
-            <Row label={`LTV`} value={pct(ltv)} />
+            <Row label={`NPW ${npwFromModel ? "· dari model" : "· proxy harga"}`} value={formatRupiah(npw)} />
+            <Row label="LTV" value={pct(ltv)} />
             <Row label="Plafon Agunan (NPW × LTV)" value={formatRupiah(plafonAgunan)} strong className="text-bri-navy" />
             <div className="my-0.5 border-t border-bri-line" />
             <Row label="Kebutuhan (Harga − DP)" value={formatRupiah(kebutuhan)} />
@@ -148,7 +146,7 @@ export function AgunanCalcCard({ status, agunan, uangMuka }: AgunanCalcCardProps
                 <span className="flex items-center gap-1 text-[8.5px] font-semibold text-red-600">
                   <AlertTriangle size={10} /> Penambahan DP: {formatRupiah(penambahanDp)}
                 </span>
-                <span className="text-[7.5px] text-red-500/80">DP total jadi {formatRupiah(dp + penambahanDp)} (kebutuhan melebihi plafon agunan)</span>
+                <span className="text-[7.5px] text-red-500/80">Plafon dibiayai = {formatRupiah(plafonAgunan)} · DP total jadi {formatRupiah(dp + penambahanDp)}</span>
               </div>
             )}
           </div>

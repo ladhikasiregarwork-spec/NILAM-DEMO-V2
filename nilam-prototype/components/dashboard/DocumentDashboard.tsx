@@ -8,6 +8,7 @@ import type { EmploymentAgreement, SlikReport } from "@/types/profile";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { UserInput } from "@/types/userInput";
+import type { AgunanKlasifikasi } from "@/data/ltv";
 import { computeCreditScore } from "@/engines/scoring/creditScore";
 import { anuitas } from "@/lib/kpr";
 import { incomePartsFromOcr } from "@/lib/kemampuan";
@@ -48,6 +49,11 @@ interface DocumentDashboardProps {
   userInput?: UserInput;
   /** Uploaded documents for the preview section. */
   previewDocs?: PreviewDoc[];
+  /** NPW (Nilai Pasar Wajar) from the appraisal model. */
+  npw?: number;
+  /** Collateral classification (shared) + setter. */
+  agunanKlas: AgunanKlasifikasi;
+  setAgunanKlas: (patch: Partial<AgunanKlasifikasi>) => void;
 }
 
 /**
@@ -65,7 +71,7 @@ interface DocumentDashboardProps {
  * OCR success, SLIK on the bureau pull, installment on the THP step. The panel
  * scrolls internally within the fixed canvas.
  */
-export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs }: DocumentDashboardProps) {
+export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, agunanKlas, setAgunanKlas }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
 
   const ocrStatus = statusOf("ocr");
@@ -156,7 +162,7 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
       </div>
 
       {/* PERHITUNGAN AGUNAN (NPW × LTV) — di atas Calculate Installment */}
-      <AgunanCalcCard status={thpStatus} agunan={agunan} uangMuka={userInput?.uangMuka} />
+      <AgunanCalcCard status={thpStatus} agunan={agunan} uangMuka={userInput?.uangMuka} npw={npw} klas={agunanKlas} setKlas={setAgunanKlas} />
 
       {/* Row 3: CALCULATE INSTALLMENT PAYMENTS | CREDIT SCORING */}
       <div className="grid grid-cols-[1.7fr_1fr] items-stretch gap-3">
