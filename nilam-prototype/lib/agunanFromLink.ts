@@ -20,6 +20,8 @@ export interface ParsedListing {
   kota?: string;
   /** schema.org addressLocality, e.g. "Bojong Gede, Bogor". */
   lokalitas?: string;
+  /** Listing photo URL (og:image / schema.org image). */
+  imageUrl?: string;
 }
 
 /** Parse a captured numeric string ("72" / "72,5") into a number. */
@@ -65,6 +67,14 @@ export function parseRumah123Html(html: string): ParsedListing {
   const lat = num(pick(html, [/"latitude"\s*:\s*(-?\d+\.\d+)/]));
   const lon = num(pick(html, [/"longitude"\s*:\s*(-?\d+\.\d+)/]));
 
+  // Listing photo: prefer og:image, fall back to a schema.org image URL.
+  const imageUrl = pick(html, [
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+    /"image"\s*:\s*"(https:[^"]+?\.(?:jpe?g|png|webp)[^"]*)"/i,
+    /"image"\s*:\s*\[\s*"(https:[^"]+?)"/i,
+  ])?.replace(/\\\//g, "/");
+
   // The PROPERTY's PostalAddress sits just before its offer/price block. Anchor
   // extraction there so we don't accidentally grab the agent/organization
   // address (e.g. the Rumah123 office in Jakarta) elsewhere on the page.
@@ -86,5 +96,5 @@ export function parseRumah123Html(html: string): ParsedListing {
     }
   }
 
-  return { harga, luasTanah, luasBangunan, lat, lon, provinsi, kecamatan, kota, lokalitas };
+  return { harga, luasTanah, luasBangunan, lat, lon, provinsi, kecamatan, kota, lokalitas, imageUrl };
 }

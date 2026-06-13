@@ -32,6 +32,9 @@ function getActiveIndex(step: FlowStep): number {
     case "data_diri":       return 3;
     case "agunan":          return 4;
     case "processing":      return 5;
+    // Survey shares the "Proses" node — from the borrower's progress view the
+    // RM survey is part of the review/processing stage.
+    case "survey":          return 5;
     case "offering":        return 6;
     case "disburse":        return 7;
     default:                return 0;

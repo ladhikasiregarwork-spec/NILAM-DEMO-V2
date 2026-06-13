@@ -8,29 +8,22 @@ import type { EmploymentAgreement, SlikReport } from "@/types/profile";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { UserInput } from "@/types/userInput";
-import type { AgunanKlasifikasi } from "@/data/ltv";
+import { ltvFromKlas, type AgunanKlasifikasi } from "@/data/ltv";
 import { computeCreditScore } from "@/engines/scoring/creditScore";
 import { anuitas } from "@/lib/kpr";
-import { incomePartsFromOcr } from "@/lib/kemampuan";
+import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
 
 import { UploadedDocsStrip } from "./UploadedDocsStrip";
-import { AgunanInfoCard } from "./AgunanInfoCard";
 import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
-import { SalarySlipCard } from "./SalarySlipCard";
-import { BankStatementTableCard } from "./BankStatementTableCard";
 import { SlikOjkCard } from "./SlikOjkCard";
-import { InstallmentCard } from "./InstallmentCard";
-import { CreditScoringCard } from "./CreditScoringCard";
 import { MatchingCard } from "./MatchingCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
-import { AgunanCalcCard } from "./AgunanCalcCard";
+import { AgunanTabCard } from "./AgunanTabCard";
+import { SummaryDecisionCard } from "./SummaryDecisionCard";
 
 import { EMPLOYMENT_AGREEMENT } from "@/data/profileFixtures";
-import { SLIP_GAJI } from "@/data/ocrFixtures";
-import { BANK_STATEMENT_ROWS } from "@/data/bankStatementFixtures";
 import { SLIK_LOANS, SLIK_TOTAL_ANGSURAN } from "@/data/slikLoansFixtures";
-import { SLIK_NASABAH } from "@/data/slikFixtures";
 import { NASABAH_INCOME } from "@/data/incomeFixtures";
 import { usiaDariKtp } from "@/lib/usia";
 
@@ -51,27 +44,22 @@ interface DocumentDashboardProps {
   previewDocs?: PreviewDoc[];
   /** NPW (Nilai Pasar Wajar) from the appraisal model. */
   npw?: number;
+  /** Land-value portion of the NPW (for the land-price comparison). */
+  npwLand?: number;
   /** Collateral classification (shared) + setter. */
   agunanKlas: AgunanKlasifikasi;
   setAgunanKlas: (patch: Partial<AgunanKlasifikasi>) => void;
 }
 
 /**
- * DocumentDashboard — the document-centric dashboard (Image 2). A vertical,
- * scrollable stack:
+ * DocumentDashboard — analyst dashboard, grid layout:
  *
- *   DATA ALREADY UPLOAD            (5-document status strip)
- *   KTP INFO | KK INFO | SK PERUSAHAAN
- *   SALARY SLIP
- *   BANK STATEMENT
- *   SLIK OJK (every loan)
- *   CALCULATE INSTALLMENT PAYMENTS
- *
- * Each section is gated on the live processing feed: document/identity info on
- * OCR success, SLIK on the bureau pull, installment on the THP step. The panel
- * scrolls internally within the fixed canvas.
+ *   DATA ALREADY UPLOAD                                   (full width)
+ *   USER INFORMATION (+ employment) | MATCHING (2 tab: rekap · transaksi)
+ *   SLIK (2 tab) | AGUNAN (2 tab) | RINGKASAN & KEPUTUSAN (approve/reject)
+ *   PREVIEW DOKUMEN                                       (full width)
  */
-export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, agunanKlas, setAgunanKlas }: DocumentDashboardProps) {
+export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
 
   const ocrStatus = statusOf("ocr");
@@ -81,8 +69,7 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
   // Live document statuses (uploads + processing feed).
   const docStatuses = deriveDocumentStatuses(statusOf, uploads);
 
-  // SK Perusahaan: prefer real OCR-extracted fields, fall back to the mock for
-  // any field the parser couldn't read.
+  // SK Perusahaan: prefer real OCR-extracted fields, fall back to the mock.
   const sk = ocr.skPerusahaan;
   const skAgreement: EmploymentAgreement = sk
     ? {
@@ -90,14 +77,13 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
         jabatan: sk.jabatan || EMPLOYMENT_AGREEMENT.jabatan,
         statusKepegawaian: sk.statusKepegawaian || EMPLOYMENT_AGREEMENT.statusKepegawaian,
         masaKerja: sk.masaKerja || EMPLOYMENT_AGREEMENT.masaKerja,
-        gajiPokok: EMPLOYMENT_AGREEMENT.gajiPokok, // SK does not carry salary
+        gajiPokok: EMPLOYMENT_AGREEMENT.gajiPokok,
         tanggalMulai: sk.tanggalMulai || EMPLOYMENT_AGREEMENT.tanggalMulai,
         tanggalBerakhir: sk.tanggalBerakhir || EMPLOYMENT_AGREEMENT.tanggalBerakhir,
       }
     : EMPLOYMENT_AGREEMENT;
 
-  // Age (from KTP) + real monthly income (slip THP → mutasi gaji → mock) feed
-  // the credit score.
+  // Age (from KTP) + real monthly income feed the credit score.
   const age = usiaDariKtp(ocr.ktp?.tanggalLahir);
   const slipThp = ocr.slipGaji?.records?.find((r) => r.thp != null)?.thp;
   const monthlyIncome =
@@ -108,7 +94,7 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
   // Income components (gaji/THR/bonus) for the payment-capacity calc.
   const income = incomePartsFromOcr(ocr);
 
-  // Credit score (9 factors) — profile (Data Diri) + deal ratios.
+  // Deal ratios.
   const hargaRumah = agunan?.harga;
   const uangMuka = userInput?.uangMuka;
   const tenorTahun = userInput?.jangkaWaktu ?? 15;
@@ -135,84 +121,87 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
     plafond,
   });
 
+  // Summary metrics: kemampuan bayar, plafond pembiayaan (di-cap agunan NPW×LTV),
+  // dan total DP (DP awal + tambahan DP bila plafon agunan kurang).
+  const kemampuan = kemampuanBayar(income.gajiBulanan, income.thrTahunan, income.bonusTahunan, slikTotalAngsuran);
+  const plafonAgunan =
+    hargaRumah != null ? Math.round((npw ?? hargaRumah) * ltvFromKlas(agunanKlas, hargaRumah)) : undefined;
+  const dpAwal = uangMuka ?? 0;
+  const kebutuhan = hargaRumah != null ? Math.max(0, hargaRumah - dpAwal) : undefined;
+  const ltv = hargaRumah != null ? ltvFromKlas(agunanKlas, hargaRumah) : 0;
+  // Plafond pembiayaan & total DP dihitung di dalam SummaryDecisionCard agar
+  // ikut berubah saat kemampuan bayar (bonus) diedit di sana.
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto scroll-thin bg-[#F5F7FA] p-3">
-      {/* Row 1: DATA ALREADY UPLOAD | NPW & INFORMASI AGUNAN */}
-      <div className="grid grid-cols-[1.5fr_1fr] gap-3">
-        <UploadedDocsStrip statuses={docStatuses} />
-        <AgunanInfoCard agunan={agunan} />
+      {/* DATA ALREADY UPLOAD — full width */}
+      <UploadedDocsStrip statuses={docStatuses} />
+
+      {/* Row 2: USER INFORMATION (+ employment) | MATCHING (2 tab) */}
+      <div className="grid grid-cols-[1fr_1.7fr] items-start gap-3">
+        <div className="flex flex-col gap-3">
+          <UserInformationCard
+            status={ocrStatus}
+            ktp={ocr.ktp}
+            kk={ocr.kk}
+            nama={userInput?.nama}
+            missing={!uploads.ktp && !uploads.kk}
+          />
+          <EmploymentAgreementCard
+            status={ocrStatus}
+            agreement={skAgreement}
+            title="Company Employment Certificate"
+            missing={!uploads.sk_perusahaan}
+            sourceLabel={sk ? "Hasil OCR" : undefined}
+          />
+        </div>
+        <MatchingCard
+          status={ocrStatus}
+          mutasi={ocr.mutasi}
+          slip={ocr.slipGaji}
+          missing={!uploads.slip_gaji || !uploads.mutasi}
+        />
       </div>
 
-      {/* Row 2: USER INFORMATION | COMPANY EMPLOYMENT CERTIFICATE INFORMATION */}
-      <div className="grid grid-cols-2 gap-3">
-        <UserInformationCard
-          status={ocrStatus}
-          ktp={ocr.ktp}
-          kk={ocr.kk}
-          nama={userInput?.nama}
-          missing={!uploads.ktp && !uploads.kk}
+      {/* Row 3: SLIK (2 tab) | AGUNAN (2 tab) | RINGKASAN & KEPUTUSAN */}
+      <div className="grid grid-cols-3 items-start gap-3">
+        <SlikOjkCard
+          status={slikStatus}
+          loans={slikLoans}
+          totalAngsuran={slikTotalAngsuran}
+          score={creditResult.score}
         />
-        <EmploymentAgreementCard
-          status={ocrStatus}
-          agreement={skAgreement}
-          title="Company Employment Certificate"
-          missing={!uploads.sk_perusahaan}
-          sourceLabel={sk ? "Hasil OCR" : undefined}
-        />
-      </div>
-
-      {/* PERHITUNGAN AGUNAN (NPW × LTV) — di atas Calculate Installment */}
-      <AgunanCalcCard status={thpStatus} agunan={agunan} uangMuka={userInput?.uangMuka} npw={npw} klas={agunanKlas} setKlas={setAgunanKlas} />
-
-      {/* Row 3: CALCULATE INSTALLMENT PAYMENTS | CREDIT SCORING */}
-      <div className="grid grid-cols-[1.7fr_1fr] items-stretch gap-3">
-        <InstallmentCard
+        <AgunanTabCard
           status={thpStatus}
-          gajiBulanan={income.gajiBulanan}
-          thrTahunan={income.thrTahunan}
-          bonusTahunan={income.bonusTahunan}
-          slikAngsuran={slikTotalAngsuran}
           agunan={agunan}
           uangMuka={userInput?.uangMuka}
-          jangkaWaktu={userInput?.jangkaWaktu}
+          npw={npw}
+          npwLand={npwLand}
+          klas={agunanKlas}
+          setKlas={setAgunanKlas}
         />
-        <CreditScoringCard status={slikStatus} result={creditResult} />
+        <SummaryDecisionCard
+          status={thpStatus}
+          kemampuan={kemampuan}
+          angsuranKpr={kprAngsuran}
+          score={creditResult.score}
+          grade={creditResult.grade}
+          breakdown={{
+            harga: hargaRumah,
+            dpAwal,
+            kebutuhan,
+            npw,
+            ltv,
+            plafonAgunan,
+            tenorBulan: tenorTahun * 12,
+            gajiBulanan: income.gajiBulanan,
+            thrTahunan: income.thrTahunan,
+            bonusTahunan: income.bonusTahunan,
+            slikAngsuran: slikTotalAngsuran,
+            factors: creditResult.factors,
+          }}
+        />
       </div>
-
-      {/* MATCHING SALARY SLIP & BANK STATEMENT */}
-      <MatchingCard
-        status={ocrStatus}
-        mutasi={ocr.mutasi}
-        slip={ocr.slipGaji}
-        missing={!uploads.slip_gaji || !uploads.mutasi}
-      />
-
-      {/* SALARY SLIP */}
-      <SalarySlipCard
-        status={ocrStatus}
-        gajiPokok={SLIP_GAJI.Gaji}
-        components={NASABAH_INCOME.components}
-        missing={!uploads.slip_gaji}
-        extracted={ocr.slipGaji}
-        count={docCounts.slip_gaji}
-      />
-
-      {/* BANK STATEMENT — month-by-month credits table */}
-      <BankStatementTableCard
-        status={ocrStatus}
-        rows={BANK_STATEMENT_ROWS}
-        missing={!uploads.mutasi}
-        count={docCounts.mutasi}
-        mutasi={ocr.mutasi}
-      />
-
-      {/* SLIK OJK — every loan */}
-      <SlikOjkCard
-        status={slikStatus}
-        loans={slikLoans}
-        totalAngsuran={slikTotalAngsuran}
-        score={creditResult.score}
-      />
 
       {/* PREVIEW DOKUMEN — dokumen terupload, di-rename sesuai klasifikasi */}
       <PreviewDocsCard docs={previewDocs ?? []} />

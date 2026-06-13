@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { MobileApp } from "@/components/mobile/MobileApp";
 import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
+import { RmMobileApp } from "@/components/rm/RmMobileApp";
 import { useNilamFlow } from "@/hooks/useNilamFlow";
 import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
 import { ltvFromKlas } from "@/data/ltv";
@@ -30,11 +31,16 @@ export default function Page() {
     clearAgunan,
     slik,
     npw,
+    npwLand,
     agunanKlas,
     setAgunanKlas,
     userInput,
     setUserInput,
     previewDocs,
+    surveyStatus,
+    surveyValue,
+    surveyNote,
+    submitSurvey,
     submit,
     reset,
   } = useNilamFlow();
@@ -46,9 +52,14 @@ export default function Page() {
     _income.bonusTahunan,
     slik?.totalAngsuran ?? 0,
   );
+  // Once the RM approves the survey, the offer uses the RM's appraised value
+  // instead of the model NPW.
+  const effectiveNpw = surveyStatus === "approved" && surveyValue != null ? surveyValue : npw;
   // Collateral plafond cap = NPW × LTV (shared classification).
   const plafonAgunan =
-    agunan?.harga != null ? Math.round((npw ?? agunan.harga) * ltvFromKlas(agunanKlas, agunan.harga)) : undefined;
+    agunan?.harga != null
+      ? Math.round((effectiveNpw ?? agunan.harga) * ltvFromKlas(agunanKlas, agunan.harga))
+      : undefined;
 
   return (
     <AppShell
@@ -66,6 +77,9 @@ export default function Page() {
           kemampuan={kemampuan}
           plafonAgunan={plafonAgunan}
           agunan={agunan}
+          surveyStatus={surveyStatus}
+          surveyNote={surveyNote}
+          surveyValue={surveyValue}
           start={start}
           editAgunan={editAgunan}
           next={next}
@@ -91,8 +105,17 @@ export default function Page() {
           userInput={userInput}
           previewDocs={previewDocs}
           npw={npw}
+          npwLand={npwLand}
           agunanKlas={agunanKlas}
           setAgunanKlas={setAgunanKlas}
+        />
+      }
+      rmMobile={
+        <RmMobileApp
+          live={{ nama: userInput?.nama, agunan, npw, npwLand, surveyStatus, surveyValue, surveyNote }}
+          agunanKlas={agunanKlas}
+          setAgunanKlas={setAgunanKlas}
+          onSubmitSurvey={submitSurvey}
         />
       }
     />

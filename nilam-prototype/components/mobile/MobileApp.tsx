@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { FlowStep, PersonaConfig } from "@/types/flow";
+import type { FlowStep, PersonaConfig, SurveyStatus } from "@/types/flow";
 import type { ClassifyResult, OcrResults } from "@/types/ocrExtract";
 import type { UserInput } from "@/types/userInput";
 import type { DocumentId } from "@/types/documents";
@@ -19,6 +19,7 @@ import { RequirementScreen } from "./screens/RequirementScreen";
 import { DataDiriScreen } from "./screens/DataDiriScreen";
 import { AgunanScreen } from "./screens/AgunanScreen";
 import { ProcessingScreen } from "./screens/ProcessingScreen";
+import { SurveyScreen } from "./screens/SurveyScreen";
 import { OfferingScreen } from "./screens/OfferingScreen";
 import { DisburseScreen } from "./screens/DisburseScreen";
 
@@ -49,6 +50,12 @@ interface MobileAppProps {
   /** Collateral plafond cap = NPW × LTV. */
   plafonAgunan?: number;
   agunan?: AgunanData;
+  /** RM survey status (for collateral ≥ Rp500 juta). */
+  surveyStatus: SurveyStatus;
+  /** RM survey note (shown on rejection). */
+  surveyNote?: string;
+  /** RM appraised value. */
+  surveyValue?: number;
   start: () => void;
   next: () => void;
   goBack: () => void;
@@ -84,6 +91,9 @@ export function MobileApp({
   kemampuan,
   plafonAgunan,
   agunan,
+  surveyStatus,
+  surveyNote,
+  surveyValue,
   start,
   next,
   goBack,
@@ -164,6 +174,17 @@ export function MobileApp({
         );
       case "processing":
         return <ProcessingScreen key="processing" />;
+      case "survey":
+        return (
+          <SurveyScreen
+            key="survey"
+            status={surveyStatus}
+            agunan={agunan}
+            note={surveyNote}
+            surveyValue={surveyValue}
+            onEditAgunan={editAgunan}
+          />
+        );
       case "offering":
         return (
           <OfferingScreen

@@ -73,16 +73,21 @@ export function AgunanScreen({
   onGoBack,
   canGoBack,
 }: AgunanScreenProps) {
-  const [mode, setMode] = useState<Mode>("link");
+  // Re-entry to swap the collateral ("Ganti Agunan") arrives with data already
+  // filled. Open straight in the editable Manual tab (fields visible & editable)
+  // and skip the prescreening check the second time round.
+  const hasAgunan = agunan?.harga != null || !!agunan?.kelurahan;
+  const [mode, setMode] = useState<Mode>(hasAgunan ? "manual" : "link");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  // Brief prescreening check before the agunan input is shown.
-  const [prescreen, setPrescreen] = useState(true);
+  // Brief prescreening check before the FIRST agunan input only.
+  const [prescreen, setPrescreen] = useState(!hasAgunan);
   useEffect(() => {
+    if (!prescreen) return;
     const t = setTimeout(() => setPrescreen(false), 1800);
     return () => clearTimeout(t);
-  }, []);
+  }, [prescreen]);
 
   const numField = (patch: Partial<AgunanData>) => onSetAgunan(patch as AgunanData);
   const canSubmit = !!agunan?.harga;

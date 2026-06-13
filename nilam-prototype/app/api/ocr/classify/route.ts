@@ -7,6 +7,21 @@ const SERVICE_URL = process.env.CLASSIFIER_URL || "http://127.0.0.1:8020";
 
 const LABELS: ClassifyLabel[] = ["ktp", "kk", "slip", "mutasi", "sk", "unknown"];
 
+/** POST with a few retries — smooths over the classifier's restart / Paddle
+ *  cold-start window (a transient connection refusal) instead of failing hard. */
+async function postWithRetry(url: string, body: FormData, attempts = 3): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, { method: "POST", body });
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * POST /api/ocr/classify
  *
@@ -32,10 +47,10 @@ export async function POST(req: Request) {
 
   let resp: Response;
   try {
-    resp = await fetch(`${SERVICE_URL}/classify-batch`, { method: "POST", body: out });
+    resp = await postWithRetry(`${SERVICE_URL}/classify-batch`, out);
   } catch {
     return Response.json(
-      { ok: false, error: `Service classifier tidak dapat dihubungi di ${SERVICE_URL}` },
+      { ok: false, error: `Service classifier tidak dapat dihubungi di ${SERVICE_URL} (sudah dicoba ulang). Pastikan service berjalan, lalu coba lagi.` },
       { status: 502 },
     );
   }

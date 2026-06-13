@@ -81,8 +81,8 @@ export function UserInformationCard({ status, ktp, kk, nama, missing }: UserInfo
                   </span>
                   {kk.members.map((m, i) => (
                     <div key={`${m.nik ?? m.nama}-${i}`} className="flex items-center justify-between gap-1">
-                      <span className="min-w-0 flex-1 truncate text-[8px] text-bri-ink" title={m.nama}>
-                        {m.nama}
+                      <span className={`min-w-0 flex-1 truncate text-[8px] ${m.nama ? "text-bri-ink" : "italic text-bri-muted/60"}`} title={m.nama ?? ""}>
+                        {m.nama || "(nama tidak terbaca)"}
                       </span>
                       <span className="shrink-0 text-[7px] tabular-nums text-bri-muted">{m.nik ?? ""}</span>
                     </div>

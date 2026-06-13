@@ -1,8 +1,15 @@
-# NILAM — Demo KPR (BRI)
+# NILAM — Demo KPR (BRI) · V2
 
 **NILAM** adalah prototipe alur pengajuan **KPR** yang *document-centric*: nasabah meng-upload dokumen (KTP, KK, Slip Gaji, SK, Mutasi rekening), lalu sistem **mengklasifikasi + meng-OCR** dokumen, menarik **SLIK**, menaksir **Nilai Pasar Wajar (NPW)** agunan, menghitung **kemampuan bayar** + **credit score**, dan menghasilkan **penawaran KPR** beserta jadwal **akad** — semuanya berjalan **lokal** (tanpa host korporat).
 
-> Tampilan terbagi dua: **simulasi aplikasi nasabah (HP)** di kiri dan **dashboard analis** di kanan, sehingga satu layar memperlihatkan input nasabah sekaligus hasil analisis kredit.
+> **Tata letak (V2):** dua aplikasi mobile berdampingan — **HP Nasabah** (alur pengajuan) + **HP Relationship Manager** (survey agunan) — dengan **dashboard analis** full-width di bawahnya. Satu layar memperlihatkan input nasabah, keputusan RM, sekaligus hasil analisis kredit.
+
+### 🆕 Yang baru di V2
+- **Relationship Manager (RM)** sebagai aplikasi mobile tersendiri.
+- **Gate survey ≥ Rp500 juta:** agunan bernilai ≥ Rp500jt **wajib disurvey RM** dulu sebelum penawaran terbit; < Rp500jt langsung ke penawaran.
+- **Perhitungan agunan dilakukan RM** saat survey (taksiran × LTV → plafon agunan).
+- **Survey harga tanah sekitar** sebagai pembanding terhadap NPW.
+- **Dashboard berbasis kartu** dengan tab internal + kartu **Ringkasan & Keputusan** (Approve/Reject) yang rinciannya bisa di-*expand*.
 
 ---
 
@@ -11,19 +18,20 @@
 - **Satu menu upload** untuk semua dokumen → tiap berkas **diklasifikasi otomatis** (KTP / KK / Slip Gaji / SK / Mutasi) lalu di-OCR sesuai jenisnya.
 - **OCR per dokumen (lokal):**
   - **KTP** → PaddleOCR lokal (NIK, nama, gender, TTL, alamat, status kawin)
-  - **KK** → Tesseract (nomor KK + anggota keluarga)
+  - **KK** → PaddleOCR mobile **+** Tesseract (union anggota), pasangan nama↔NIK via posisi box
   - **Slip Gaji** → per tanggal bayar: upah, potongan, THP, THR, bonus
   - **SK Kerja** → 2 format (SKK & Kutipan SK BRI)
   - **Mutasi** (e-Statement BRImo) → transaksi + klasifikasi *gaji / THR / bonus*, multi-bulan
-- **SLIK OJK** dari Excel → fasilitas, bunga, angsuran, kolektibilitas, total angsuran.
-- **NPW (Nilai Pasar Wajar)** → model ML lokal (nilai tanah + nilai bangunan).
-- **Perhitungan Agunan** → plafon agunan = **NPW × LTV** (klasifikasi LTV dapat diubah analis).
-- **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR**.
+- **SLIK OJK** dari Excel → fasilitas, bunga, angsuran, kolektibilitas, total angsuran, **+ Riwayat Tunggakan** (timeline kolektibilitas 12 bulan + 2 fasilitas terburuk).
+- **NPW (Nilai Pasar Wajar)** → model ML lokal (nilai tanah + nilai bangunan) + **survey harga tanah sekitar** sebagai pembanding.
+- **Relationship Manager (RM)** → antrian survey agunan ≥ Rp500jt; RM isi taksiran + klasifikasi LTV → **plafon agunan**, lalu Setujui/Tolak (diteruskan ke nasabah).
+- **Perhitungan Agunan** → plafon agunan = **NPW (atau taksiran RM) × LTV**.
+- **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR** — bonus dapat diedit, plafond & DP ikut menyesuaikan.
 - **Credit Scoring** 9 faktor.
-- **Matching Slip ↔ Mutasi** → rekap bulanan, penanda hijau/merah bila slip cocok/selisih dengan mutasi.
-- **Penawaran KPR** → bunga *fixed → floating*, tenor menyesuaikan usia, plafon di-cap ke NPW × LTV (sisanya jadi **tambahan DP**).
+- **Income Nasabah** (matching slip ↔ mutasi) → rekap bulanan (Slip vs Mutasi Rekening), penanda hijau/merah cocok/selisih.
+- **Penawaran KPR** → bunga *fixed → floating*, tenor menyesuaikan usia, plafon di-cap ke **min(NPW×LTV, kemampuan)** (sisanya jadi **tambahan DP**).
 - **Akad** → dana dibiayai, rincian DP saat akad, kantor cabang & tanggal akad.
-- **Preview dokumen** di dashboard (dikelompokkan per jenis).
+- **Gambar agunan** dari link listing (og:image) + **Preview dokumen** di dashboard.
 
 ---
 
@@ -60,6 +68,7 @@ Browser (Next.js) memanggil **route proxy** internal (`/api/*`) yang meneruskan 
 | `/api/ocr/identitas` · `/slip` · `/mutasi` · `/sk` | classifier `8020` |
 | `/api/slik` | classifier `8020` |
 | `/api/npw` | NPW `8030` |
+| `/api/agunan/from-link` | Rumah123 + Nominatim (eksternal, opsional) |
 
 ---
 
@@ -67,8 +76,12 @@ Browser (Next.js) memanggil **route proxy** internal (`/api/*`) yang meneruskan 
 
 ```
 Pembukaan → Syarat & Ketentuan → Upload Dokumen → Data Diri
-   → (Prescreening) → Data Agunan → Pemrosesan → Penawaran KPR → Akad
+   → (Prescreening) → Data Agunan → Pemrosesan
+   → [agunan ≥ Rp500jt]  → Survey RM → (Setujui)  ┐
+   → [agunan < Rp500jt]  ───────────────────────  ├→ Penawaran KPR → Akad
 ```
+
+**Gate survey (≥ Rp500 juta):** setelah pemrosesan, agunan ≥ Rp500jt masuk **antrian HP RM**. Nasabah menunggu; RM membuka pengajuan, melihat **pembanding harga tanah sekitar**, mengisi **nilai taksiran + klasifikasi LTV** (plafon = taksiran × LTV), lalu **Setujui** (penawaran terbit pakai taksiran RM) atau **Tolak**. Agunan < Rp500jt langsung ke penawaran.
 
 ---
 
@@ -154,8 +167,9 @@ Semua punya **default**, jadi opsional.
 ├── nilam-prototype/            # Aplikasi web (UI nasabah + dashboard analis)
 │   ├── app/                    # Next.js App Router (halaman + route /api proxy)
 │   ├── components/
-│   │   ├── mobile/             # Layar alur nasabah (HP)
-│   │   └── dashboard/          # Kartu analisis (agunan, matching, scoring, dst.)
+│   │   ├── mobile/             # Layar alur nasabah (HP) + SurveyScreen
+│   │   ├── rm/                 # Aplikasi mobile Relationship Manager (survey agunan)
+│   │   └── dashboard/          # Kartu analisis (income, SLIK, agunan, ringkasan+keputusan)
 │   ├── engines/                # Logika murni (NPW proxy, matching, scoring)
 │   ├── hooks/                  # useNilamFlow — state machine alur
 │   ├── lib/ · data/ · types/   # util, matriks LTV/DIR, tipe

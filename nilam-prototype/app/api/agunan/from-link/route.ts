@@ -92,6 +92,7 @@ export async function POST(req: Request) {
     kodepos: geo.kodepos,
     lat: parsed.lat,
     lon: parsed.lon,
+    imageUrl: parsed.imageUrl,
     sumber: "link",
     url,
   };

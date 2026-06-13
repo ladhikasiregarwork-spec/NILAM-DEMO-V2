@@ -16,24 +16,14 @@ interface MatchingCardProps {
 }
 
 const TXN_GRID = "grid grid-cols-[60px_1fr_1fr_1fr_2.2fr] items-center gap-1.5";
-// Bulan · 8 editable cols · Total Income Mutasi (computed) · Status
-const REC_GRID = "grid grid-cols-[56px_repeat(9,1fr)_50px] items-center gap-1";
+// Bulan · Slip[Gaji THR Bonus Total] · Mutasi[Gaji THR Bonus Total] · Status
+const REC_GRID = "grid grid-cols-[56px_repeat(8,1fr)_56px] items-center gap-1";
 
-type Field =
-  | "incomeSlip" | "potonganNet" | "gajiSlip" | "thrSlip" | "bonusSlip"
-  | "gajiMutasi" | "thrMutasi" | "bonusMutasi";
+type Field = "gajiSlip" | "thrSlip" | "bonusSlip" | "gajiMutasi" | "thrMutasi" | "bonusMutasi";
 
-const COLS: { f: Field; label: string }[] = [
-  { f: "incomeSlip", label: "Income Slip" },
-  { f: "potonganNet", label: "Potongan Slip" },
-  { f: "gajiSlip", label: "Gaji Slip" },
-  { f: "thrSlip", label: "THR Slip" },
-  { f: "bonusSlip", label: "Bonus Slip" },
-  { f: "gajiMutasi", label: "Gaji Mut." },
-  { f: "thrMutasi", label: "THR Mut." },
-  { f: "bonusMutasi", label: "Bonus Mut." },
-];
-const FIELDS: Field[] = COLS.map((c) => c.f);
+const SLIP_FIELDS: Field[] = ["gajiSlip", "thrSlip", "bonusSlip"];
+const MUT_FIELDS: Field[] = ["gajiMutasi", "thrMutasi", "bonusMutasi"];
+const FIELDS: Field[] = [...SLIP_FIELDS, ...MUT_FIELDS];
 
 /** Slip ↔ mutasi counterpart, for the green/red match colouring. */
 const PAIR: Partial<Record<Field, Field>> = {
@@ -52,6 +42,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
   const ready = status === "success" && !missing;
   const { txns, recaps } = useMemo(() => buildMatch(mutasi, slip), [mutasi, slip]);
   const [edits, setEdits] = useState<Record<string, number>>({});
+  const [mtab, setMtab] = useState<"rekap" | "transaksi">("rekap");
 
   const eff = (key: string, field: Field, original?: number) => {
     const e = edits[`${key}|${field}`];
@@ -76,7 +67,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
       <div className="mb-1.5 flex items-center gap-1">
         <GitCompareArrows size={11} className="text-bri-navy" strokeWidth={2} />
         <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-bri-muted">
-          Matching Salary Slip &amp; Bank Statement
+          Income Nasabah
         </span>
       </div>
 
@@ -95,25 +86,67 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Monthly recap — slip vs mutasi, editable (ATAS) */}
+          {/* Internal tabs: Rekap per Bulan | Transaksi Pemasukan */}
+          <div className="flex gap-1 rounded-pill border border-bri-line bg-bri-bg/40 p-0.5">
+            {([["rekap", "Rekap per Bulan"], ["transaksi", "Transaksi Pemasukan"]] as ["rekap" | "transaksi", string][]).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMtab(id)}
+                className={cn(
+                  "flex-1 rounded-pill px-2 py-1 text-[9px] font-semibold transition-colors",
+                  mtab === id ? "bg-bri-navy text-white" : "text-bri-muted hover:text-bri-ink",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Monthly recap — slip vs mutasi, editable */}
+          {mtab === "rekap" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· slip vs mutasi · nominal bisa diedit</span>
             </p>
             <div className="overflow-x-auto scroll-thin">
-              <div className="min-w-[880px] overflow-hidden rounded-lg border border-bri-line/70">
-                <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 py-1 text-[6.5px] font-semibold uppercase tracking-[0.02em] text-bri-muted")}>
+              <div className="min-w-[720px] overflow-hidden rounded-lg border border-bri-line/70">
+                {/* Grouped header — Slip (4) · Mutasi Rekening (4) */}
+                <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 pt-1 text-[6.5px] font-bold uppercase tracking-[0.04em] text-bri-muted")}>
+                  <span />
+                  <span className="col-span-4 border-l border-bri-line/60 text-center text-bri-navy">Slip Gaji</span>
+                  <span className="col-span-4 border-l border-bri-line/60 text-center text-bri-navy">Mutasi Rekening</span>
+                  <span />
+                </div>
+                <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 pb-1 text-[6.5px] font-semibold uppercase tracking-[0.02em] text-bri-muted")}>
                   <span>Bulan</span>
-                  {COLS.map((c) => <span key={c.f} className="text-right">{c.label}</span>)}
-                  <span className="text-right">Tot. Income Mut.</span>
+                  <span className="border-l border-bri-line/60 text-right">Gaji</span>
+                  <span className="text-right">THR</span>
+                  <span className="text-right">Bonus</span>
+                  <span className="text-right">Total</span>
+                  <span className="border-l border-bri-line/60 text-right">Gaji</span>
+                  <span className="text-right">THR</span>
+                  <span className="text-right">Bonus</span>
+                  <span className="text-right">Total</span>
                   <span className="text-center">Status</span>
                 </div>
                 {recaps.map((r) => {
                   const edited = isEdited(r.key, r);
-                  const totMut =
-                    (eff(r.key, "gajiMutasi", r.gajiMutasi) ?? 0) +
-                    (eff(r.key, "thrMutasi", r.thrMutasi) ?? 0) +
-                    (eff(r.key, "bonusMutasi", r.bonusMutasi) ?? 0);
+                  const totSlip = SLIP_FIELDS.reduce((s, f) => s + (eff(r.key, f, r[f]) ?? 0), 0);
+                  const totMut = MUT_FIELDS.reduce((s, f) => s + (eff(r.key, f, r[f]) ?? 0), 0);
+                  const input = (f: Field, leftBorder = false) => (
+                    <input
+                      key={f}
+                      type="number"
+                      value={eff(r.key, f, r[f]) ?? ""}
+                      onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
+                      className={cn(
+                        "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
+                        leftBorder && "border-l-bri-line/60",
+                        matchColor(f, r.key, r),
+                      )}
+                    />
+                  );
                   return (
                     <div key={r.key} className={cn(REC_GRID, "border-t border-bri-line/50 px-2 py-1 text-[8.5px]")}>
                       <span className="flex min-w-0 flex-col">
@@ -122,18 +155,13 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
                           <span className="truncate text-[6px] text-bri-muted" title={r.tglBayarSlip}>slip: {r.tglBayarSlip}</span>
                         )}
                       </span>
-                      {FIELDS.map((f) => (
-                        <input
-                          key={f}
-                          type="number"
-                          value={eff(r.key, f, r[f]) ?? ""}
-                          onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
-                          className={cn(
-                            "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
-                            matchColor(f, r.key, r),
-                          )}
-                        />
-                      ))}
+                      {input("gajiSlip", true)}
+                      {input("thrSlip")}
+                      {input("bonusSlip")}
+                      <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-ink">{formatRupiah(totSlip)}</span>
+                      {input("gajiMutasi", true)}
+                      {input("thrMutasi")}
+                      {input("bonusMutasi")}
                       <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-navy">{formatRupiah(totMut)}</span>
                       <span className="flex justify-center">
                         <span className={cn("rounded-pill px-1.5 py-px text-[7px] font-semibold", edited ? "bg-amber-100 text-amber-700" : "bg-bri-bg text-bri-muted")}>
@@ -146,13 +174,15 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
               </div>
             </div>
             <p className="mt-0.5 text-[7px] text-bri-muted/70">
-              Income/Potongan/Gaji(THP)/THR/Bonus dari slip · Gaji/THR/Bonus + Tot. Income dari mutasi.
+              Gaji(THP)/THR/Bonus + Total dari slip · Gaji/THR/Bonus + Total dari mutasi.
               <span className="text-emerald-600"> Hijau</span> = slip cocok dengan mutasi,
               <span className="text-red-500"> merah</span> = selisih · Status “Edited” bila diubah.
             </p>
           </div>
+          )}
 
-          {/* Income transactions (BAWAH) */}
+          {/* Income transactions */}
+          {mtab === "transaksi" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Transaksi Pemasukan (dari Mutasi)
@@ -178,6 +208,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

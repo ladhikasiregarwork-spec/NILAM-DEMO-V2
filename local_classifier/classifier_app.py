@@ -296,28 +296,57 @@ _KK_NON_NAME = re.compile(
     r"provinsi|kota|kabupaten|kecamatan|kelurahan|desa|alamat|kode|pos|nomor|"
     r"\bkk\b|tanggal|dikeluarkan|kepala|status|\bnama\b|\bnik\b|jenis|kelamin|"
     r"agama|pekerjaan|pendidikan|gol|darah|hubungan|kewarganegaraan|tempat|"
-    r"lahir|kawin|tercatat|\brt\b|\brw\b|islam|laki|perempuan",
+    r"lahir|kawin|tercatat|\brt\b|\brw\b|islam|laki|perempuan|"
+    r"\bwni\b|\bwna\b|\bnip\b|\bpns\b|\bnrp\b|paspor|dokumen|negara",
     re.IGNORECASE,
 )
+
+
+def _name_quality(nama) -> int:
+    """Score how name-like a token is (higher = better). Negative = not a name:
+    no digits, ≥4 letters, not a KK label/keyword. Multi-word names score higher."""
+    t = re.sub(r"\s+", " ", str(nama or "")).strip()
+    if not t or re.search(r"\d", t):
+        return -1
+    letters = re.findall(r"[A-Za-z]", t)
+    if len(letters) < 4 or _KK_NON_NAME.search(t):
+        return -1
+    return len(letters) + (10 if " " in t else 0)
+
+
+_NIK_FIX = str.maketrans({"O": "0", "o": "0", "Q": "0", "I": "1", "l": "1", "|": "1"})
+
+
+def _nik_norm(t) -> "str | None":
+    """Normalise an OCR token to a 16-digit NIK: drop spaces/dots/dashes and fix
+    the common O→0 / I→1 confusions. Returns the digits, or None if not a NIK."""
+    s = re.sub(r"[\s.\-]", "", str(t or "")).translate(_NIK_FIX)
+    return s if re.fullmatch(r"\d{16}", s) else None
 
 
 def extract_kk_from_items(items: list[dict]) -> dict:
     """Reconstruct KK fields from positioned PaddleOCR boxes: the top-most
     16-digit = Nomor KK; every other 16-digit NIK is paired with the name on
-    the same table row (same vertical centre, to its left)."""
+    the same table row (same vertical centre, to its left). NIK rows are kept
+    even when their name can't be read (so the member count stays correct)."""
     fields = {"nomorKK": None, "kepalaKeluarga": None, "alamat": None, "members": []}
-    niks = sorted([it for it in items if re.fullmatch(r"\d{16}", it["text"])], key=lambda it: it["yc"])
+    niks = sorted(
+        [{**it, "text": n} for it in items if (n := _nik_norm(it["text"]))],
+        key=lambda it: it["yc"],
+    )
 
     txt = "\n".join(it["text"] for it in sorted(items, key=lambda it: (it["yc"], it["x"])))
     # Nomor KK: the labelled 16-digit at the top; else the top-most 16-digit.
     fields["nomorKK"] = _first(r"No\.?\s*[:.]?\s*(\d{16})", txt) or (niks[0]["text"] if niks else None)
 
     def is_name(t: str) -> bool:
+        if re.search(r"\d", t):  # names carry no digits (rejects NIP/NIK/dates)
+            return False
         words = t.split()
         letters = re.findall(r"[A-Za-z]", t)
         uppers = sum(1 for c in t if c.isalpha() and c.isupper())
-        return (2 <= len(words) <= 5 and len(t) <= 45 and len(letters) >= 4
-                and uppers >= 0.7 * len(letters) and not _KK_NON_NAME.search(t))
+        return (1 <= len(words) <= 5 and len(t) <= 45 and len(letters) >= 4
+                and uppers >= 0.6 * len(letters) and not _KK_NON_NAME.search(t))
 
     # Member NIKs = all NIKs except the one equal to Nomor KK.
     member_niks = [n for n in niks if n["text"] != fields["nomorKK"]]
@@ -327,14 +356,15 @@ def extract_kk_from_items(items: list[dict]) -> dict:
             continue
         seen.add(nik["text"])
         row = [it for it in items
-               if abs(it["yc"] - nik["yc"]) < max(25.0, 0.8 * nik["h"])
+               if abs(it["yc"] - nik["yc"]) < max(32.0, 1.0 * nik["h"])
                and it["x"] < nik["x"] and is_name(it["text"])]
         row.sort(key=lambda it: it["x"])
-        if row:
-            members.append({"nama": re.sub(r"\s+", " ", row[0]["text"]).strip(),
-                            "nik": nik["text"], "hubungan": ""})
+        # Keep the member even if no name was read on its row (count must stay
+        # right); the union step / UI handles the missing name.
+        nama = re.sub(r"\s+", " ", row[0]["text"]).strip() if row else None
+        members.append({"nama": nama, "nik": nik["text"], "hubungan": ""})
     fields["members"] = members[:12]
-    if members:
+    if members and members[0]["nama"]:
         fields["kepalaKeluarga"] = members[0]["nama"]
 
     fields["alamat"] = _first(r"Alamat\s*[:.]?\s*([^\n]+)", txt)
@@ -915,12 +945,53 @@ async def extract_kk(file: UploadFile = File(...)) -> dict:
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty upload")
-    # KK uses Tesseract: it reads this table correctly (kepala + members with the
-    # right NIKs) and is fast. PaddleOCR's scattered table boxes scramble the
-    # name↔NIK pairing, so it is intentionally NOT used here — it IS used for the
-    # KTP photo, where Tesseract fails entirely.
-    text = extract_text(data, file.filename or "kk")
-    return {"ok": True, "filename": file.filename, "fields": extract_kk_fields(text), "engine": "tesseract"}
+    # Run BOTH engines and UNION the members to maximise recall: PaddleOCR's
+    # positioned boxes catch rows Tesseract misses (scanned/photo KK) and vice
+    # versa. Some KK have members Paddle alone or Tesseract alone won't pair.
+    paddle_fields: dict = {}
+    pil = _render_for_paddle(data, file.filename or "kk", 3.0)
+    if pil is not None:
+        paddle_fields = extract_kk_from_items(_paddle_items(_smart_crop(pil), "mobile"))
+    tess_fields = extract_kk_fields(extract_text(data, file.filename or "kk"))
+
+    # Merge members by NIK, keeping the best-quality name across engines
+    # (Tesseract names are usually cleaner; Paddle fills rows Tesseract missed).
+    by_nik: dict[str, dict] = {}
+    no_nik: list[dict] = []
+    for src in (tess_fields, paddle_fields):
+        for m in (src.get("members") or []):
+            nik = (m.get("nik") or "").strip()
+            if nik:
+                cur = by_nik.get(nik)
+                if cur is None or _name_quality(m.get("nama")) > _name_quality(cur.get("nama")):
+                    by_nik[nik] = {**m, "nik": nik}
+            elif _name_quality(m.get("nama")) >= 0:
+                no_nik.append(m)
+
+    members: list[dict] = []
+    present: set[str] = set()
+    for nik, m in by_nik.items():
+        nama = m.get("nama") if _name_quality(m.get("nama")) >= 0 else None  # drop garbage, keep the row
+        members.append({"nama": nama, "nik": nik, "hubungan": m.get("hubungan", "")})
+        if nama:
+            present.add(re.sub(r"\s+", " ", nama).strip().lower())
+    for m in no_nik:  # name-only members (no NIK paired)
+        nm = re.sub(r"\s+", " ", (m.get("nama") or "")).strip().lower()
+        if nm and nm not in present:
+            present.add(nm)
+            members.append({"nama": m.get("nama"), "nik": m.get("nik"), "hubungan": m.get("hubungan", "")})
+
+    kepala = tess_fields.get("kepalaKeluarga") or paddle_fields.get("kepalaKeluarga")
+    if _name_quality(kepala) < 0:
+        kepala = next((m["nama"] for m in members if m.get("nama")), None)
+
+    fields = {
+        "nomorKK": paddle_fields.get("nomorKK") or tess_fields.get("nomorKK"),
+        "kepalaKeluarga": kepala,
+        "alamat": paddle_fields.get("alamat") or tess_fields.get("alamat"),
+        "members": members[:12],
+    }
+    return {"ok": True, "filename": file.filename, "fields": fields, "engine": "paddle+tesseract"}
 
 
 @app.post("/extract-slip")

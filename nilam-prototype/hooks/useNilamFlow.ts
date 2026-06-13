@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { FlowStep, PersonaConfig } from "@/types/flow";
+import type { FlowStep, PersonaConfig, SurveyStatus } from "@/types/flow";
+import { SURVEY_THRESHOLD } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
 import type { OcrResults, ClassifyResult, PreviewDoc } from "@/types/ocrExtract";
@@ -43,12 +44,20 @@ export interface NilamState {
   slik?: SlikReport;
   /** NPW (Nilai Pasar Wajar) from the appraisal model, by agunan. */
   npw?: number;
+  /** Land value portion of the NPW (for the nearby land-price comparison). */
+  npwLand?: number;
   /** Collateral classification (drives LTV), shared by the dashboard + offer. */
   agunanKlas: AgunanKlasifikasi;
   /** Borrower application data (prefilled from OCR, editable on Data Diri). */
   userInput: UserInput;
   /** Uploaded documents kept for preview (blob URLs + classified type). */
   previewDocs: PreviewDoc[];
+  /** RM survey status (for collateral ≥ SURVEY_THRESHOLD). */
+  surveyStatus: SurveyStatus;
+  /** Appraised value entered by the RM during the survey (overrides NPW once approved). */
+  surveyValue?: number;
+  /** RM survey note. */
+  surveyNote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,11 +81,13 @@ export type NilamAction =
   | { type: "setAgunan"; data: AgunanData }
   | { type: "clearAgunan" }
   | { type: "setSlik"; data: SlikReport }
-  | { type: "setNpw"; value: number | undefined }
+  | { type: "setNpw"; value: number | undefined; land?: number }
   | { type: "setAgunanKlas"; patch: Partial<AgunanKlasifikasi> }
   | { type: "setUserInput"; patch: Partial<UserInput> }
   | { type: "prefillUserInput"; data: Partial<UserInput> }
   | { type: "addPreviewDocs"; docs: PreviewDoc[] }
+  | { type: "setSurveyStatus"; status: SurveyStatus }
+  | { type: "submitSurvey"; decision: "approved" | "rejected"; value?: number; note?: string }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -98,6 +109,7 @@ export function initialState(): NilamState {
     userInput: {},
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
+    surveyStatus: "none",
   };
 }
 
@@ -120,6 +132,7 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     userInput: {},
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
+    surveyStatus: "none",
   };
 }
 
@@ -218,14 +231,39 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
     case "addPreviewDocs":
       return { ...state, previewDocs: [...state.previewDocs, ...action.docs] };
 
+    case "setSurveyStatus":
+      return { ...state, surveyStatus: action.status };
+
+    case "submitSurvey": {
+      // RM finished the on-site survey. On approval the borrower advances from
+      // the waiting screen to the offer (using the RM's appraised value); on
+      // rejection they stay on the survey step and see the rejection notice.
+      if (action.decision === "approved") {
+        const idx = state.steps.indexOf("offering");
+        return {
+          ...state,
+          surveyStatus: "approved",
+          surveyValue: action.value,
+          surveyNote: action.note,
+          stepIndex: idx === -1 ? state.stepIndex : idx,
+        };
+      }
+      return {
+        ...state,
+        surveyStatus: "rejected",
+        surveyValue: action.value,
+        surveyNote: action.note,
+      };
+    }
+
     case "setAgunan":
       return { ...state, agunan: { ...state.agunan, ...action.data } };
 
     case "clearAgunan":
-      return { ...state, agunan: undefined, npw: undefined };
+      return { ...state, agunan: undefined, npw: undefined, npwLand: undefined };
 
     case "setNpw":
-      return { ...state, npw: action.value };
+      return { ...state, npw: action.value, npwLand: action.land };
 
     case "setAgunanKlas":
       return { ...state, agunanKlas: { ...state.agunanKlas, ...action.patch } };
@@ -255,6 +293,11 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
 export function useNilamFlow() {
   const [state, dispatch] = useReducer(nilamReducer, undefined, initialState);
 
+  // Always-fresh mirror of state so callbacks (submit) never read a stale
+  // closure — critical for the ≥ threshold survey decision after async work.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   // Holds the active orchestrator so we can cancel it on navigation or reset.
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
 
@@ -278,6 +321,7 @@ export function useNilamFlow() {
   const canGoBack =
     state.stepIndex > 0 &&
     currentStep !== "processing" &&
+    currentStep !== "survey" &&
     currentStep !== "analyst_decision";
 
   // -------------------------------------------------------------------------
@@ -313,10 +357,12 @@ export function useNilamFlow() {
     dispatch({ type: "goBack" });
   }, [cancelOrchestrator]);
 
-  // Jump straight back to the Agunan step (e.g. from the offer) to swap the
-  // collateral, then re-submit to re-run scoring + offering.
+  // Jump straight back to the Agunan step (e.g. from the offer or a rejected
+  // survey) to swap the collateral. Withdraw from the RM survey queue first so a
+  // stale pending entry can't be approved mid-edit; re-submit re-runs everything.
   const editAgunan = useCallback(() => {
     cancelOrchestrator();
+    dispatch({ type: "setSurveyStatus", status: "none" });
     dispatch({ type: "goTo", step: "agunan" });
   }, [cancelOrchestrator]);
 
@@ -556,7 +602,11 @@ export function useNilamFlow() {
         });
         const j = await r.json().catch(() => null);
         if (!cancelled && r.ok && j?.ok && j.fairValue != null) {
-          dispatch({ type: "setNpw", value: Math.round(j.fairValue) });
+          dispatch({
+            type: "setNpw",
+            value: Math.round(j.fairValue),
+            land: j.landValue != null ? Math.round(j.landValue) : undefined,
+          });
         }
       } catch {
         /* best-effort */
@@ -626,12 +676,30 @@ export function useNilamFlow() {
   // submit() — orchestration kick (called from Requirement step)
   // -------------------------------------------------------------------------
 
+  // RM submits the survey result for the current (≥ threshold) application.
+  const submitSurvey = useCallback(
+    (decision: "approved" | "rejected", value?: number, note?: string) => {
+      dispatch({ type: "submitSurvey", decision, value, note });
+    },
+    [],
+  );
+
   const submit = useCallback(() => {
     // Cancel any in-flight orchestrator before starting a new run.
     cancelOrchestrator();
 
-    // Derive joint at submit time from current state.jointAnswer
-    const joint = state.jointAnswer === "ya";
+    // Fresh survey state for this run (a re-submit after "Ganti Agunan").
+    dispatch({ type: "setSurveyStatus", status: "none" });
+
+    // Read the LATEST state from the ref (never a stale closure).
+    const s = stateRef.current;
+
+    // Collateral price decides whether an RM survey gate applies.
+    const hargaAgunan = s.agunan?.harga ?? 0;
+    const needsSurvey = hargaAgunan >= SURVEY_THRESHOLD;
+
+    // Derive joint at submit time from the current jointAnswer.
+    const joint = s.jointAnswer === "ya";
 
     // Build outputs keyed by NodeId
     const outputs: Partial<Record<NodeId, unknown>> = {
@@ -667,15 +735,19 @@ export function useNilamFlow() {
       }
     };
 
-    // Run the pipeline. Only advance to `analyst_decision` if this specific
-    // orchestrator instance is still the active one.
-    orch.run(state.persona, outputs, emit).then(() => {
-      if (orchestratorRef.current === orch) {
+    // Run the pipeline. Only advance if this specific orchestrator instance is
+    // still the active one. Collateral ≥ threshold goes to the RM survey queue
+    // (waiting screen); otherwise the offer is released straight away.
+    orch.run(s.persona, outputs, emit).then(() => {
+      if (orchestratorRef.current !== orch) return;
+      if (needsSurvey) {
+        dispatch({ type: "setSurveyStatus", status: "pending" });
+        dispatch({ type: "goTo", step: "survey" });
+      } else {
         dispatch({ type: "goTo", step: "offering" });
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.persona, state.jointAnswer, cancelOrchestrator]);
+  }, [cancelOrchestrator]);
 
   return {
     persona: state.persona,
@@ -694,11 +766,16 @@ export function useNilamFlow() {
     agunan: state.agunan,
     slik: state.slik,
     npw: state.npw,
+    npwLand: state.npwLand,
     agunanKlas: state.agunanKlas,
     setAgunanKlas,
     userInput: state.userInput,
     setUserInput,
     previewDocs: state.previewDocs,
+    surveyStatus: state.surveyStatus,
+    surveyValue: state.surveyValue,
+    surveyNote: state.surveyNote,
+    submitSurvey,
     setNasabahPayroll,
     setPasanganPayroll,
     setJointAnswer,
