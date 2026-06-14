@@ -9,7 +9,7 @@
 - **Gate survey ≥ Rp500 juta:** agunan bernilai ≥ Rp500jt **wajib disurvey RM** dulu sebelum penawaran terbit; < Rp500jt langsung ke penawaran.
 - **Perhitungan agunan dilakukan RM** saat survey (taksiran × LTV → plafon agunan).
 - **Survey harga tanah sekitar** sebagai pembanding terhadap NPW.
-- **Dashboard berbasis kartu** dengan tab internal + kartu **Ringkasan & Keputusan** (Approve/Reject) yang rinciannya bisa di-*expand*.
+- **Dashboard berbasis kartu** dengan tab internal + kartu **Ringkasan & Keputusan** — Plafond Pembiayaan · Total DP · Kemampuan Bayar · Credit Score · **Tenor** · **Angsuran Aktif (SLIK)** + tombol Approve/Reject (rinciannya bisa di-*expand*).
 
 ---
 
@@ -28,7 +28,7 @@
 - **Perhitungan Agunan** → plafon agunan = **NPW (atau taksiran RM) × LTV**.
 - **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR** — bonus dapat diedit di kartu Ringkasan, lalu **plafond pembiayaan & total DP otomatis menyesuaikan** (di-cap kemampuan).
 - **Credit Scoring** 9 faktor.
-- **Income Nasabah** (matching slip ↔ mutasi) → rekap bulanan: **Slip** (Gaji Pokok · Tunjangan · THR · Bonus · Pend. Lainnya · Potongan · **THP** otomatis) vs **Mutasi** (Gaji · Tunjangan · THR · Bonus · Total Income); nominal bisa diedit, hijau/merah membandingkan **THP ↔ Gaji mutasi**.
+- **Income Nasabah** → tab **Summary Income** (rekap per bulan): **Slip** (Gaji Pokok · Tunjangan · THR · Bonus · Pend. Lainnya · Potongan · **THP** otomatis) vs **Mutasi** (Gaji · Tunjangan · THR · Bonus · Total Income); nominal bisa diedit (format ribuan), hijau/merah membandingkan **THP ↔ Gaji mutasi**.
 - **Penawaran KPR** → bunga *fixed → floating*, tenor menyesuaikan usia, plafon di-cap ke **min(NPW×LTV, kemampuan)** (sisanya jadi **tambahan DP**).
 - **Akad** → dana dibiayai, rincian DP saat akad, kantor cabang & tanggal akad.
 - **Gambar agunan** dari link listing (og:image) + **Preview dokumen** di dashboard.

@@ -123,9 +123,9 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Internal tabs: Rekap per Bulan | Transaksi Pemasukan */}
+          {/* Internal tabs: Summary Income | Transaksi Pemasukan */}
           <div className="flex gap-1 rounded-pill border border-bri-line bg-bri-bg/40 p-0.5">
-            {([["rekap", "Rekap per Bulan"], ["transaksi", "Transaksi Pemasukan"]] as ["rekap" | "transaksi", string][]).map(([id, label]) => (
+            {([["rekap", "Summary Income"], ["transaksi", "Transaksi Pemasukan"]] as ["rekap" | "transaksi", string][]).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
@@ -144,7 +144,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
           {mtab === "rekap" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
-              Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· rincian slip gaji · nominal bisa diedit · THP otomatis</span>
+              Summary Income <span className="font-normal normal-case text-bri-muted/70">· rincian slip gaji per bulan · nominal bisa diedit · THP otomatis</span>
             </p>
             <div className="overflow-x-auto scroll-thin">
               <div className="min-w-[1200px] overflow-hidden rounded-lg border border-bri-line/70">
@@ -167,9 +167,10 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
                   const input = (f: Field, leftBorder = false, colorClass = "text-bri-ink") => (
                     <input
                       key={f}
-                      type="number"
-                      value={val(r, f)}
-                      onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
+                      type="text"
+                      inputMode="numeric"
+                      value={val(r, f).toLocaleString("id-ID")}
+                      onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value.replace(/[^\d]/g, "")) || 0 }))}
                       className={cn(
                         "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] font-medium tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
                         colorClass,

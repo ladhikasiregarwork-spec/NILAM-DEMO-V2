@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardCheck, Home, Wallet, Coins, Gauge, CheckCircle2, XCircle, ChevronDown, Pencil } from "lucide-react";
+import { ClipboardCheck, Home, Wallet, Coins, Gauge, CheckCircle2, XCircle, ChevronDown, Pencil, CalendarClock, Receipt } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
 import { penghasilanBulanan, dirRate, kemampuanBayar } from "@/lib/kemampuan";
@@ -201,6 +201,18 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
               </div>
             ))}
           </Metric>
+
+          {/* Tenor + angsuran aktif */}
+          <div className="flex gap-1.5">
+            <div className="flex-1 rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
+              <p className="flex items-center gap-1 text-[8px] text-bri-muted"><CalendarClock size={10} /> Tenor</p>
+              <p className="text-[12px] font-bold tabular-nums text-bri-navy">{Math.round(b.tenorBulan / 12)} tahun</p>
+            </div>
+            <div className="flex-1 rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
+              <p className="flex items-center gap-1 text-[8px] text-bri-muted"><Receipt size={10} /> Angsuran Aktif (SLIK) / bln</p>
+              <p className="text-[12px] font-bold tabular-nums text-bri-navy">{formatRupiah(b.slikAngsuran)}</p>
+            </div>
+          </div>
 
           <div className="flex-1" />
 
