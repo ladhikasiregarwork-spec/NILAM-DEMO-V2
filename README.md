@@ -18,17 +18,17 @@
 - **Satu menu upload** untuk semua dokumen → tiap berkas **diklasifikasi otomatis** (KTP / KK / Slip Gaji / SK / Mutasi) lalu di-OCR sesuai jenisnya.
 - **OCR per dokumen (lokal):**
   - **KTP** → PaddleOCR lokal (NIK, nama, gender, TTL, alamat, status kawin)
-  - **KK** → PaddleOCR mobile **+** Tesseract (union anggota), pasangan nama↔NIK via posisi box
-  - **Slip Gaji** → per tanggal bayar: upah, potongan, THP, THR, bonus
+  - **KK** → PaddleOCR mobile **+** Tesseract (union anggota), pasangan nama↔NIK via posisi box; anggota tetap dihitung walau nama gagal terbaca + normalisasi NIK
+  - **Slip Gaji** → per tanggal: **Upah/Gaji Pokok**, **Σ Tunjangan**, THR, Bonus, Total Upah, Potongan, THP (Pendapatan Lainnya = sisa Total Upah, mis. Bonus Saham/Natura)
   - **SK Kerja** → 2 format (SKK & Kutipan SK BRI)
   - **Mutasi** (e-Statement BRImo) → transaksi + klasifikasi *gaji / THR / bonus*, multi-bulan
 - **SLIK OJK** dari Excel → fasilitas, bunga, angsuran, kolektibilitas, total angsuran, **+ Riwayat Tunggakan** (timeline kolektibilitas 12 bulan + 2 fasilitas terburuk).
 - **NPW (Nilai Pasar Wajar)** → model ML lokal (nilai tanah + nilai bangunan) + **survey harga tanah sekitar** sebagai pembanding.
-- **Relationship Manager (RM)** → antrian survey agunan ≥ Rp500jt; RM isi taksiran + klasifikasi LTV → **plafon agunan**, lalu Setujui/Tolak (diteruskan ke nasabah).
+- **Relationship Manager (RM)** → antrian survey agunan ≥ Rp500jt; RM isi taksiran + **klasifikasi agunan lengkap** (Rumah Baru/Lama · Developer · Properti · Tipe → LTV) → **plafon agunan = taksiran × LTV**, lihat pembanding harga tanah sekitar, lalu Setujui/Tolak (diteruskan ke nasabah).
 - **Perhitungan Agunan** → plafon agunan = **NPW (atau taksiran RM) × LTV**.
-- **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR** — bonus dapat diedit, plafond & DP ikut menyesuaikan.
+- **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR** — bonus dapat diedit di kartu Ringkasan, lalu **plafond pembiayaan & total DP otomatis menyesuaikan** (di-cap kemampuan).
 - **Credit Scoring** 9 faktor.
-- **Income Nasabah** (matching slip ↔ mutasi) → rekap bulanan (Slip vs Mutasi Rekening), penanda hijau/merah cocok/selisih.
+- **Income Nasabah** (matching slip ↔ mutasi) → rekap bulanan: **Slip** (Gaji Pokok · Tunjangan · THR · Bonus · Pend. Lainnya · Potongan · **THP** otomatis) vs **Mutasi** (Gaji · Tunjangan · THR · Bonus · Total Income); nominal bisa diedit, hijau/merah membandingkan **THP ↔ Gaji mutasi**.
 - **Penawaran KPR** → bunga *fixed → floating*, tenor menyesuaikan usia, plafon di-cap ke **min(NPW×LTV, kemampuan)** (sisanya jadi **tambahan DP**).
 - **Akad** → dana dibiayai, rincian DP saat akad, kantor cabang & tanggal akad.
 - **Gambar agunan** dari link listing (og:image) + **Preview dokumen** di dashboard.
