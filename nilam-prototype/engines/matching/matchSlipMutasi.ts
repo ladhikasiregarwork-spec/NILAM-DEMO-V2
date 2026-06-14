@@ -24,6 +24,12 @@ export interface MonthlyRecap {
   bonusSlip?: number;
   /** Total Upah (gross income) from the slip. */
   incomeSlip?: number;
+  /** Upah/Gaji Pokok from the slip (when OCR reads it). */
+  gajiPokokSlip?: number;
+  /** Sum of "Tunjangan ..." earning lines from the slip (excl. THR). */
+  tunjanganSlip?: number;
+  /** Total Potongan (full deductions) from the slip. */
+  potonganSlip?: number;
   /** Net deductions = Total Potongan − potongan(bonus + THR + cuti). */
   potonganNet?: number;
   /** Raw payment date printed on the slip ("25.05.2026"), when matched. */
@@ -122,8 +128,11 @@ export function buildMatch(mutasi?: MutasiExtract, slip?: SlipGajiExtract): Matc
     if (rec.thp != null) r.gajiSlip = (r.gajiSlip ?? 0) + rec.thp; // THP ↔ gaji mutasi
     if (rec.thr != null) r.thrSlip = (r.thrSlip ?? 0) + rec.thr;
     if (rec.bonus != null) r.bonusSlip = (r.bonusSlip ?? 0) + rec.bonus;
+    if (rec.gajiPokok != null) r.gajiPokokSlip = (r.gajiPokokSlip ?? 0) + rec.gajiPokok;
+    if (rec.tunjangan != null) r.tunjanganSlip = (r.tunjanganSlip ?? 0) + rec.tunjangan;
     if (rec.totalUpah != null) r.incomeSlip = (r.incomeSlip ?? 0) + rec.totalUpah;
     if (rec.totalPotongan != null) {
+      r.potonganSlip = (r.potonganSlip ?? 0) + rec.totalPotongan;
       const net = rec.totalPotongan - (rec.potonganBonus ?? 0) - (rec.potonganThr ?? 0) - (rec.potonganCuti ?? 0);
       r.potonganNet = (r.potonganNet ?? 0) + net;
     }

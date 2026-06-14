@@ -137,8 +137,8 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
       {/* DATA ALREADY UPLOAD — full width */}
       <UploadedDocsStrip statuses={docStatuses} />
 
-      {/* Row 2: USER INFORMATION (+ employment) | MATCHING (2 tab) */}
-      <div className="grid grid-cols-[1fr_1.7fr] items-start gap-3">
+      {/* Row 2: USER INFORMATION (+ employment) | INCOME NASABAH (lebih lebar) */}
+      <div className="grid grid-cols-[250px_minmax(0,1fr)] items-start gap-3">
         <div className="flex flex-col gap-3">
           <UserInformationCard
             status={ocrStatus}

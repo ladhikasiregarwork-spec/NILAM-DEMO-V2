@@ -243,8 +243,8 @@ export function MobileApp({
         </PhoneMockup>
       </div>
 
-      {/* ── Flow stepper — shrink-0 pinned below phone, no gap ────────── */}
-      <div className="shrink-0 border-t border-bri-line bg-white px-2 pb-2 pt-1.5">
+      {/* ── Flow stepper — fixed-height bar so both phones match in size ── */}
+      <div className="flex h-[60px] shrink-0 flex-col justify-center border-t border-bri-line bg-white px-2">
         <FlowStepper currentStep={currentStep} />
       </div>
     </div>

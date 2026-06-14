@@ -16,21 +16,55 @@ interface MatchingCardProps {
 }
 
 const TXN_GRID = "grid grid-cols-[60px_1fr_1fr_1fr_2.2fr] items-center gap-1.5";
-// Bulan · Slip[Gaji THR Bonus Total] · Mutasi[Gaji THR Bonus Total] · Status
-const REC_GRID = "grid grid-cols-[56px_repeat(8,1fr)_56px] items-center gap-1";
+// Bulan · Slip[Gaji Pokok, Tunjangan, THR, Bonus, Pend. Lainnya, Potongan, THP] · Mutasi[Gaji, Tunjangan, THR, Bonus, Total Income] · Status
+const REC_GRID = "grid grid-cols-[64px_repeat(12,1fr)_58px] items-center gap-1";
 
-type Field = "gajiSlip" | "thrSlip" | "bonusSlip" | "gajiMutasi" | "thrMutasi" | "bonusMutasi";
+/** Editable recap fields (THP & Total Income mutasi are computed, not edited). */
+type Field =
+  | "gajiPokok" | "tunjangan" | "thr" | "bonus" | "pendapatanLainnya" | "potongan"
+  | "gajiMut" | "tunjanganMut" | "thrMut" | "bonusMut";
 
-const SLIP_FIELDS: Field[] = ["gajiSlip", "thrSlip", "bonusSlip"];
-const MUT_FIELDS: Field[] = ["gajiMutasi", "thrMutasi", "bonusMutasi"];
-const FIELDS: Field[] = [...SLIP_FIELDS, ...MUT_FIELDS];
+const SLIP_COLS: { f: Field; label: string }[] = [
+  { f: "gajiPokok", label: "Gaji Pokok" },
+  { f: "tunjangan", label: "Tunjangan" },
+  { f: "thr", label: "THR" },
+  { f: "bonus", label: "Bonus" },
+  { f: "pendapatanLainnya", label: "Pend. Lainnya" },
+  { f: "potongan", label: "Potongan" },
+];
+const MUT_COLS: { f: Field; label: string }[] = [
+  { f: "gajiMut", label: "Gaji" },
+  { f: "tunjanganMut", label: "Tunjangan" },
+  { f: "thrMut", label: "THR" },
+  { f: "bonusMut", label: "Bonus" },
+];
+const ALL_FIELDS: Field[] = [...SLIP_COLS.map((c) => c.f), ...MUT_COLS.map((c) => c.f)];
 
-/** Slip ↔ mutasi counterpart, for the green/red match colouring. */
-const PAIR: Partial<Record<Field, Field>> = {
-  gajiSlip: "gajiMutasi", gajiMutasi: "gajiSlip",
-  thrSlip: "thrMutasi", thrMutasi: "thrSlip",
-  bonusSlip: "bonusMutasi", bonusMutasi: "bonusSlip",
-};
+/**
+ * Per-row OCR default per editable field. Slip uses Upah Pokok + Tunjangan when
+ * the OCR reads them; "Pendapatan Lainnya" is the residual of Total Upah (e.g.
+ * Bonus Saham, Pendapatan Natura) so the components still sum to the gross.
+ * Mutasi credits classify only gaji/THR/bonus, so mutasi tunjangan defaults to 0.
+ */
+function slipDefault(r: MonthlyRecap, f: Field): number {
+  const gross = r.incomeSlip ?? ((r.gajiSlip ?? 0) + (r.potonganSlip ?? 0));
+  const tj = r.tunjanganSlip ?? 0;
+  const thr = r.thrSlip ?? 0;
+  const bonus = r.bonusSlip ?? 0;
+  const gp = r.gajiPokokSlip ?? Math.max(0, gross - thr - bonus - tj);
+  switch (f) {
+    case "gajiPokok": return gp;
+    case "tunjangan": return tj;
+    case "thr": return thr;
+    case "bonus": return bonus;
+    case "pendapatanLainnya": return Math.max(0, gross - gp - tj - thr - bonus);
+    case "potongan": return r.potonganSlip ?? 0;
+    case "gajiMut": return r.gajiMutasi ?? 0;
+    case "tunjanganMut": return 0;
+    case "thrMut": return r.thrMutasi ?? 0;
+    case "bonusMut": return r.bonusMutasi ?? 0;
+  }
+}
 
 /**
  * MatchingCard — "Matching Salary Slip & Bank Statement". Per-month recap
@@ -44,22 +78,25 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [mtab, setMtab] = useState<"rekap" | "transaksi">("rekap");
 
-  const eff = (key: string, field: Field, original?: number) => {
-    const e = edits[`${key}|${field}`];
-    return e != null ? e : original;
-  };
-  const isEdited = (key: string, r: MonthlyRecap) =>
-    FIELDS.some((f) => {
-      const e = edits[`${key}|${f}`];
-      return e != null && e !== (r[f] ?? 0);
+  // Effective value = edited override, else the OCR default.
+  const val = (r: MonthlyRecap, f: Field) => edits[`${r.key}|${f}`] ?? slipDefault(r, f);
+  // THP = (gaji pokok + tunjangan + THR + bonus + pendapatan lainnya) − potongan.
+  const thpOf = (r: MonthlyRecap) =>
+    val(r, "gajiPokok") + val(r, "tunjangan") + val(r, "thr") + val(r, "bonus") + val(r, "pendapatanLainnya") - val(r, "potongan");
+  // Total Income mutasi = gaji + tunjangan + THR + bonus.
+  const totalMutOf = (r: MonthlyRecap) =>
+    val(r, "gajiMut") + val(r, "tunjanganMut") + val(r, "thrMut") + val(r, "bonusMut");
+  const isEdited = (r: MonthlyRecap) =>
+    ALL_FIELDS.some((f) => {
+      const e = edits[`${r.key}|${f}`];
+      return e != null && e !== slipDefault(r, f);
     });
-  const matchColor = (field: Field, key: string, r: MonthlyRecap): string => {
-    const other = PAIR[field];
-    if (!other) return "text-bri-ink";
-    const a = eff(key, field, r[field]);
-    const b = eff(key, other, r[other]);
-    if (a == null || b == null || a <= 0 || b <= 0) return "text-bri-ink";
-    return Math.abs(a - b) / Math.max(a, b) <= 0.05 ? "text-emerald-600 font-semibold" : "text-red-500 font-semibold";
+  // Matching: THP (slip) vs Gaji (mutasi) — gaji yang masuk rekening ≈ THP.
+  const matchColor = (r: MonthlyRecap): string => {
+    const a = thpOf(r);
+    const b = val(r, "gajiMut");
+    if (a <= 0 || b <= 0) return "text-bri-navy";
+    return Math.abs(a - b) / Math.max(a, b) <= 0.05 ? "text-emerald-600" : "text-red-500";
   };
 
   return (
@@ -103,47 +140,40 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
             ))}
           </div>
 
-          {/* Monthly recap — slip vs mutasi, editable */}
+          {/* Monthly recap — slip breakdown (THP computed) vs mutasi income */}
           {mtab === "rekap" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
-              Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· slip vs mutasi · nominal bisa diedit</span>
+              Rekap per Bulan <span className="font-normal normal-case text-bri-muted/70">· rincian slip gaji · nominal bisa diedit · THP otomatis</span>
             </p>
             <div className="overflow-x-auto scroll-thin">
-              <div className="min-w-[720px] overflow-hidden rounded-lg border border-bri-line/70">
-                {/* Grouped header — Slip (4) · Mutasi Rekening (4) */}
+              <div className="min-w-[1200px] overflow-hidden rounded-lg border border-bri-line/70">
+                {/* Grouped header — Slip Gaji (7) · Mutasi Rekening (5) */}
                 <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 pt-1 text-[6.5px] font-bold uppercase tracking-[0.04em] text-bri-muted")}>
                   <span />
-                  <span className="col-span-4 border-l border-bri-line/60 text-center text-bri-navy">Slip Gaji</span>
-                  <span className="col-span-4 border-l border-bri-line/60 text-center text-bri-navy">Mutasi Rekening</span>
+                  <span className="col-span-7 border-l border-bri-line/60 text-center text-bri-navy">Slip Gaji</span>
+                  <span className="col-span-5 border-l border-bri-line/60 text-center text-bri-navy">Mutasi Rekening</span>
                   <span />
                 </div>
                 <div className={cn(REC_GRID, "bg-bri-bg/70 px-2 pb-1 text-[6.5px] font-semibold uppercase tracking-[0.02em] text-bri-muted")}>
                   <span>Bulan</span>
-                  <span className="border-l border-bri-line/60 text-right">Gaji</span>
-                  <span className="text-right">THR</span>
-                  <span className="text-right">Bonus</span>
-                  <span className="text-right">Total</span>
-                  <span className="border-l border-bri-line/60 text-right">Gaji</span>
-                  <span className="text-right">THR</span>
-                  <span className="text-right">Bonus</span>
-                  <span className="text-right">Total</span>
+                  {SLIP_COLS.map((c, i) => <span key={c.f} className={cn("text-right", i === 0 && "border-l border-bri-line/60")}>{c.label}</span>)}
+                  <span className="text-right font-bold text-bri-navy">THP</span>
+                  {MUT_COLS.map((c, i) => <span key={c.f} className={cn("text-right", i === 0 && "border-l border-bri-line/60")}>{c.label}</span>)}
+                  <span className="text-right font-bold text-bri-navy">Total Income</span>
                   <span className="text-center">Status</span>
                 </div>
                 {recaps.map((r) => {
-                  const edited = isEdited(r.key, r);
-                  const totSlip = SLIP_FIELDS.reduce((s, f) => s + (eff(r.key, f, r[f]) ?? 0), 0);
-                  const totMut = MUT_FIELDS.reduce((s, f) => s + (eff(r.key, f, r[f]) ?? 0), 0);
-                  const input = (f: Field, leftBorder = false) => (
+                  const input = (f: Field, leftBorder = false, colorClass = "text-bri-ink") => (
                     <input
                       key={f}
                       type="number"
-                      value={eff(r.key, f, r[f]) ?? ""}
+                      value={val(r, f)}
                       onChange={(e) => setEdits((prev) => ({ ...prev, [`${r.key}|${f}`]: Number(e.target.value) }))}
                       className={cn(
-                        "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
+                        "w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[7.5px] font-medium tabular-nums hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none",
+                        colorClass,
                         leftBorder && "border-l-bri-line/60",
-                        matchColor(f, r.key, r),
                       )}
                     />
                   );
@@ -155,17 +185,13 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
                           <span className="truncate text-[6px] text-bri-muted" title={r.tglBayarSlip}>slip: {r.tglBayarSlip}</span>
                         )}
                       </span>
-                      {input("gajiSlip", true)}
-                      {input("thrSlip")}
-                      {input("bonusSlip")}
-                      <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-ink">{formatRupiah(totSlip)}</span>
-                      {input("gajiMutasi", true)}
-                      {input("thrMutasi")}
-                      {input("bonusMutasi")}
-                      <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-navy">{formatRupiah(totMut)}</span>
+                      {SLIP_COLS.map((c, i) => input(c.f, i === 0))}
+                      <span className={cn("px-1 text-right text-[7.5px] font-bold tabular-nums", matchColor(r))} title="THP = (Gaji Pokok + Tunjangan + THR + Bonus + Pend. Lainnya) − Potongan · dicocokkan dengan Gaji mutasi">{formatRupiah(thpOf(r))}</span>
+                      {MUT_COLS.map((c, i) => input(c.f, i === 0, c.f === "gajiMut" ? cn(matchColor(r), "font-semibold") : "text-bri-ink"))}
+                      <span className="px-1 text-right text-[7.5px] font-bold tabular-nums text-bri-navy" title="Total Income = Gaji + Tunjangan + THR + Bonus (mutasi)">{formatRupiah(totalMutOf(r))}</span>
                       <span className="flex justify-center">
-                        <span className={cn("rounded-pill px-1.5 py-px text-[7px] font-semibold", edited ? "bg-amber-100 text-amber-700" : "bg-bri-bg text-bri-muted")}>
-                          {edited ? "Edited" : "Non-edited"}
+                        <span className={cn("rounded-pill px-1.5 py-px text-[7px] font-semibold", isEdited(r) ? "bg-amber-100 text-amber-700" : "bg-bri-bg text-bri-muted")}>
+                          {isEdited(r) ? "Edited" : "Non-edited"}
                         </span>
                       </span>
                     </div>
@@ -174,9 +200,8 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
               </div>
             </div>
             <p className="mt-0.5 text-[7px] text-bri-muted/70">
-              Gaji(THP)/THR/Bonus + Total dari slip · Gaji/THR/Bonus + Total dari mutasi.
-              <span className="text-emerald-600"> Hijau</span> = slip cocok dengan mutasi,
-              <span className="text-red-500"> merah</span> = selisih · Status “Edited” bila diubah.
+              <b>THP = (Gaji Pokok + Tunjangan + THR + Bonus + Pend. Lainnya) − Potongan.</b> Pend. Lainnya = sisa Total Upah (mis. Bonus Saham, Pendapatan Natura). Upah Pokok &amp; Tunjangan diisi dari OCR bila terbaca.
+              Matching: <span className="text-emerald-600">hijau</span> = <b>THP cocok dengan Gaji (mutasi)</b>, <span className="text-red-500">merah</span> = selisih (gaji yang masuk rekening ≈ THP).
             </p>
           </div>
           )}

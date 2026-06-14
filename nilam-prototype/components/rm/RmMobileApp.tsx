@@ -14,8 +14,8 @@ import {
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
 import {
-  ltvFromKlas, TIER_LABEL, LAMA_LABEL,
-  type AgunanKlasifikasi, type AgunanKategori, type DeveloperTier, type RumahLamaJenis,
+  ltvFromKlas, TIER_LABEL, PROPERTI_LABEL, UKURAN_LABEL, LAMA_LABEL,
+  type AgunanKlasifikasi, type AgunanKategori, type DeveloperTier, type PropertiTipe, type UkuranTipe, type RumahLamaJenis,
 } from "@/data/ltv";
 import { PhoneMockup } from "../mobile/PhoneMockup";
 import { LandPriceComparison } from "../dashboard/LandPriceComparison";
@@ -77,7 +77,9 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
   const plafonAgunanRm = Math.round(taksiran * ltvRm);
 
   return (
-    <PhoneMockup>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3">
+        <PhoneMockup>
       {/* RM header */}
       <div className="flex shrink-0 items-center gap-2 border-b border-bri-line bg-bri-navy px-3 py-2 text-white">
         <span className="flex h-5 w-5 items-center justify-center rounded bg-white/15"><UserCheck size={12} /></span>
@@ -166,21 +168,51 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
                     ))}
                   </div>
                   {agunanKlas.kategori === "baru" ? (
-                    <select
-                      value={agunanKlas.tier}
-                      onChange={(e) => setAgunanKlas({ tier: e.target.value as DeveloperTier })}
-                      className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
-                    >
-                      {(Object.keys(TIER_LABEL) as DeveloperTier[]).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
-                    </select>
+                    <div className="flex flex-col gap-1">
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[7px] font-semibold uppercase tracking-[0.05em] text-bri-muted">Developer</span>
+                        <select
+                          value={agunanKlas.tier}
+                          onChange={(e) => setAgunanKlas({ tier: e.target.value as DeveloperTier })}
+                          className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
+                        >
+                          {(Object.keys(TIER_LABEL) as DeveloperTier[]).map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[7px] font-semibold uppercase tracking-[0.05em] text-bri-muted">Properti</span>
+                        <select
+                          value={agunanKlas.prop}
+                          onChange={(e) => setAgunanKlas({ prop: e.target.value as PropertiTipe })}
+                          className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
+                        >
+                          {(Object.keys(PROPERTI_LABEL) as PropertiTipe[]).map((p) => <option key={p} value={p}>{PROPERTI_LABEL[p]}</option>)}
+                        </select>
+                      </label>
+                      {agunanKlas.prop !== "ruko" && (
+                        <label className="flex flex-col gap-0.5">
+                          <span className="text-[7px] font-semibold uppercase tracking-[0.05em] text-bri-muted">Tipe</span>
+                          <select
+                            value={agunanKlas.ukuran}
+                            onChange={(e) => setAgunanKlas({ ukuran: e.target.value as UkuranTipe })}
+                            className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
+                          >
+                            {(Object.keys(UKURAN_LABEL) as UkuranTipe[]).map((u) => <option key={u} value={u}>{UKURAN_LABEL[u]}</option>)}
+                          </select>
+                        </label>
+                      )}
+                    </div>
                   ) : (
-                    <select
-                      value={agunanKlas.jenisLama}
-                      onChange={(e) => setAgunanKlas({ jenisLama: e.target.value as RumahLamaJenis })}
-                      className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
-                    >
-                      {(Object.keys(LAMA_LABEL) as RumahLamaJenis[]).map((j) => <option key={j} value={j}>{LAMA_LABEL[j]}</option>)}
-                    </select>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[7px] font-semibold uppercase tracking-[0.05em] text-bri-muted">Jenis</span>
+                      <select
+                        value={agunanKlas.jenisLama}
+                        onChange={(e) => setAgunanKlas({ jenisLama: e.target.value as RumahLamaJenis })}
+                        className="w-full rounded-md border border-bri-line bg-white px-1.5 py-1 text-[8.5px] text-bri-ink focus:border-bri-blue focus:outline-none"
+                      >
+                        {(Object.keys(LAMA_LABEL) as RumahLamaJenis[]).map((j) => <option key={j} value={j}>{LAMA_LABEL[j]}</option>)}
+                      </select>
+                    </label>
                   )}
                   <div className="mt-1.5 flex items-center justify-between border-t border-bri-line/60 pt-1">
                     <span className="text-[8px] text-bri-muted">LTV {pctLtv(ltvRm)} · Plafon Agunan</span>
@@ -230,6 +262,15 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
           </div>
         )}
       </div>
-    </PhoneMockup>
+        </PhoneMockup>
+      </div>
+      {/* Bottom bar — same height as the nasabah stepper so phones match */}
+      <div className="flex h-[60px] shrink-0 flex-col items-center justify-center border-t border-bri-line bg-white px-3">
+        <span className="flex items-center gap-1.5 text-bri-muted">
+          <UserCheck size={13} />
+          <span className="text-[9px] font-medium">Survey Agunan · Relationship Manager</span>
+        </span>
+      </div>
+    </div>
   );
 }

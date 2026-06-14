@@ -18,6 +18,10 @@ export interface SlipRecord {
   thp?: number;
   thr?: number;
   bonus?: number;
+  /** Upah/Gaji Pokok line from the slip. */
+  gajiPokok?: number;
+  /** Sum of all "Tunjangan ..." earning lines (excl. THR). */
+  tunjangan?: number;
   /** Deduction line items for bonus / THR / cuti (to net out of potongan). */
   potonganBonus?: number;
   potonganThr?: number;

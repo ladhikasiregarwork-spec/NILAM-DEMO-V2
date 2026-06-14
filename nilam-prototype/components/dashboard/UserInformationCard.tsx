@@ -53,43 +53,41 @@ export function UserInformationCard({ status, ktp, kk, nama, missing }: UserInfo
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-1.5">
-          <div className="grid grid-cols-2 gap-3">
-            {/* KTP */}
-            <div className="flex flex-col gap-0.5">
-              <div className="mb-0.5 flex items-center gap-1 text-bri-navy">
-                <UserCircle2 size={10} strokeWidth={2} />
-                <span className="text-[7.5px] font-bold uppercase tracking-[0.08em]">Data Diri (KTP)</span>
-              </div>
-              <Row label="Nama" value={dash(nama ?? ktp?.nama)} />
-              <Row label="NIK" value={dash(ktp?.nik)} />
-              <Row label="Gender" value={dash(ktp?.gender)} />
-              <Row label="Tgl Lahir" value={dash(ktp?.tanggalLahir)} />
+          {/* KTP */}
+          <div className="flex flex-col gap-0.5">
+            <div className="mb-0.5 flex items-center gap-1 text-bri-navy">
+              <UserCircle2 size={10} strokeWidth={2} />
+              <span className="text-[7.5px] font-bold uppercase tracking-[0.08em]">Data Diri (KTP)</span>
             </div>
+            <Row label="Nama" value={dash(nama ?? ktp?.nama)} />
+            <Row label="NIK" value={dash(ktp?.nik)} />
+            <Row label="Gender" value={dash(ktp?.gender)} />
+            <Row label="Tgl Lahir" value={dash(ktp?.tanggalLahir)} />
+          </div>
 
-            {/* KK */}
-            <div className="flex flex-col gap-0.5">
-              <div className="mb-0.5 flex items-center gap-1 text-bri-navy">
-                <Users size={10} strokeWidth={2} />
-                <span className="text-[7.5px] font-bold uppercase tracking-[0.08em]">Kartu Keluarga</span>
-              </div>
-              <Row label="No. KK" value={dash(kk?.nomorKK)} />
-              <Row label="Kepala Kel." value={dash(kk?.kepalaKeluarga)} />
-              {kk?.members && kk.members.length > 0 && (
-                <div className="mt-0.5 flex flex-col gap-0.5">
-                  <span className="text-[7px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
-                    Anggota Keluarga
-                  </span>
-                  {kk.members.map((m, i) => (
-                    <div key={`${m.nik ?? m.nama}-${i}`} className="flex items-center justify-between gap-1">
-                      <span className={`min-w-0 flex-1 truncate text-[8px] ${m.nama ? "text-bri-ink" : "italic text-bri-muted/60"}`} title={m.nama ?? ""}>
-                        {m.nama || "(nama tidak terbaca)"}
-                      </span>
-                      <span className="shrink-0 text-[7px] tabular-nums text-bri-muted">{m.nik ?? ""}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* KK — di bawah Data Diri */}
+          <div className="flex flex-col gap-0.5 border-t border-bri-line pt-1.5">
+            <div className="mb-0.5 flex items-center gap-1 text-bri-navy">
+              <Users size={10} strokeWidth={2} />
+              <span className="text-[7.5px] font-bold uppercase tracking-[0.08em]">Kartu Keluarga</span>
             </div>
+            <Row label="No. KK" value={dash(kk?.nomorKK)} />
+            <Row label="Kepala Kel." value={dash(kk?.kepalaKeluarga)} />
+            {kk?.members && kk.members.length > 0 && (
+              <div className="mt-0.5 flex flex-col gap-0.5">
+                <span className="text-[7px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
+                  Anggota Keluarga
+                </span>
+                {kk.members.map((m, i) => (
+                  <div key={`${m.nik ?? m.nama}-${i}`} className="flex items-center justify-between gap-1">
+                    <span className={`min-w-0 flex-1 truncate text-[8px] ${m.nama ? "text-bri-ink" : "italic text-bri-muted/60"}`} title={m.nama ?? ""}>
+                      {m.nama || "(nama tidak terbaca)"}
+                    </span>
+                    <span className="shrink-0 text-[7px] tabular-nums text-bri-muted">{m.nik ?? ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Alamat */}

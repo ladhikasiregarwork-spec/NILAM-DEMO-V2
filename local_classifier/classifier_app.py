@@ -662,8 +662,25 @@ def extract_slip_fields(text: str) -> dict:
     potongan_bonus = _sum_potongan("bonus")
     potongan_thr = _sum_potongan("thr", r"hari\s*raya")
     potongan_cuti = _sum_potongan("cuti")
+
+    # Earnings breakdown: Upah/Gaji Pokok + sum of every "Tunjangan ..." line
+    # (THR / "Tunjangan Hari Raya" is captured separately above, so skip it).
+    gaji_pokok = _money_of(text, r"(?:Upah|Gaji)\s*Pokok\s*[:.]?\s*(?:Rp)?\s*([\d.,]{4,})")
+
+    def _sum_tunjangan() -> float:
+        total = 0.0
+        for line in text.splitlines():
+            if re.search(r"\bTunjangan\b", line, re.IGNORECASE) and not re.search(r"hari\s*raya", line, re.IGNORECASE):
+                nums = re.findall(r"\d[\d.,]{3,}", line)  # rightmost number = amount column
+                if nums:
+                    total += _money(nums[-1])
+        return round(total, 2)
+
+    tunjangan = _sum_tunjangan() or None
+
     return {"tanggalPembayaran": tgl, "totalUpah": upah, "totalPotongan": potongan,
             "thp": thp, "thr": thr, "bonus": bonus,
+            "gajiPokok": gaji_pokok, "tunjangan": tunjangan,
             "potonganBonus": potongan_bonus, "potonganThr": potongan_thr,
             "potonganCuti": potongan_cuti}
 

@@ -15,7 +15,9 @@ interface SlikOjkCardProps {
   score: number;
 }
 
-const GRID = "grid grid-cols-[1.5fr_1fr_1fr_50px_74px_1fr_60px_40px] items-center gap-2";
+// Fixed column widths so header & data align; the table scrolls horizontally
+// inside the narrow card (like the Riwayat Tunggakan tab).
+const GRID = "grid grid-cols-[124px_88px_96px_46px_72px_88px_58px_30px] items-center gap-2";
 
 /** "8.25" → "8,25%", 21 → "21%". */
 const pct = (b?: number) =>
@@ -155,7 +157,8 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCard
             </div>
             </div>
           ) : stab === "detail" ? (
-        <div className="overflow-hidden rounded-lg border border-bri-line/70">
+        <div className="overflow-x-auto scroll-thin">
+        <div className="min-w-[630px] overflow-hidden rounded-lg border border-bri-line/70">
           <div className={cn(GRID, "bg-bri-bg/70 px-2 py-1 text-[7px] font-semibold uppercase tracking-[0.04em] text-bri-muted")}>
             <span>Lembaga / Jenis</span>
             <span className="text-right">Plafon</span>
@@ -205,6 +208,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCard
             <span />
             <span />
           </div>
+        </div>
         </div>
           ) : (
             /* Riwayat Tunggakan — 12-bulan kolektibilitas per fasilitas */
