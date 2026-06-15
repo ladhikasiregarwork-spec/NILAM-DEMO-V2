@@ -9,7 +9,7 @@
 - **Gate survey ≥ Rp500 juta:** agunan bernilai ≥ Rp500jt **wajib disurvey RM** dulu sebelum penawaran terbit; < Rp500jt langsung ke penawaran.
 - **Perhitungan agunan dilakukan RM** saat survey (taksiran × LTV → plafon agunan).
 - **Survey harga tanah sekitar** sebagai pembanding terhadap NPW.
-- **Dashboard berbasis kartu** dengan tab internal + kartu **Ringkasan & Keputusan** — Plafond Pembiayaan · Total DP · Kemampuan Bayar · Credit Score · **Tenor** · **Angsuran Aktif (SLIK)** + tombol Approve/Reject (rinciannya bisa di-*expand*).
+- **Dashboard 5 tab besar** — **Summary** · **Detail Transaksi** · **Detail SLIK** · **Detail Agunan** · **Preview Dokumen**. Kartu **Ringkasan & Keputusan** (di Summary): Plafond Pembiayaan · Total DP · Kemampuan Bayar · Credit Score · **Tenor** · **Angsuran Aktif (SLIK)** + Approve/Reject (rincian bisa di-*expand*).
 
 ---
 
@@ -22,16 +22,17 @@
   - **Slip Gaji** → per tanggal: **Upah/Gaji Pokok**, **Σ Tunjangan**, THR, Bonus, Total Upah, Potongan, THP (Pendapatan Lainnya = sisa Total Upah, mis. Bonus Saham/Natura)
   - **SK Kerja** → 2 format (SKK & Kutipan SK BRI)
   - **Mutasi** (e-Statement BRImo) → transaksi + klasifikasi *gaji / THR / bonus*, multi-bulan
-- **SLIK OJK** dari Excel → fasilitas, bunga, angsuran, kolektibilitas, total angsuran, **+ Riwayat Tunggakan** (timeline kolektibilitas 12 bulan + 2 fasilitas terburuk).
+- **SLIK OJK** dari Excel → fasilitas, bunga, angsuran, kolektibilitas, total angsuran, **+ Riwayat Tunggakan** (timeline kolektibilitas **24 bulan** per fasilitas + ringkasan 2 fasilitas terburuk). Tab **Detail SLIK** = tabel fasilitas (mengisi lebar dashboard) + timeline tunggakan.
 - **NPW (Nilai Pasar Wajar)** → model ML lokal (nilai tanah + nilai bangunan) + **survey harga tanah sekitar** sebagai pembanding.
 - **Relationship Manager (RM)** → antrian survey agunan ≥ Rp500jt; RM isi taksiran + **klasifikasi agunan lengkap** (Rumah Baru/Lama · Developer · Properti · Tipe → LTV) → **plafon agunan = taksiran × LTV**, lihat pembanding harga tanah sekitar, lalu Setujui/Tolak (diteruskan ke nasabah).
 - **Perhitungan Agunan** → plafon agunan = **NPW (atau taksiran RM) × LTV**.
 - **Kemampuan Bayar** = (gaji + THR/12 + bonus/12 − angsuran SLIK) × **DIR** — bonus dapat diedit di kartu Ringkasan, lalu **plafond pembiayaan & total DP otomatis menyesuaikan** (di-cap kemampuan).
 - **Credit Scoring** 9 faktor.
-- **Income Nasabah** → tab **Summary Income** (rekap per bulan): **Slip** (Gaji Pokok · Tunjangan · THR · Bonus · Pend. Lainnya · Potongan · **THP** otomatis) vs **Mutasi** (Gaji · Tunjangan · THR · Bonus · Total Income); nominal bisa diedit (format ribuan), hijau/merah membandingkan **THP ↔ Gaji mutasi**.
+- **Income Nasabah** (kartu di tab **Summary**) → **Summary Income** (rekap per bulan): **Slip** (Gaji Pokok · Tunjangan · THR · Bonus · Pend. Lainnya · Potongan · **THP** otomatis) vs **Mutasi** (Gaji · Tunjangan · THR · Bonus · Total Income); nominal editable (format ribuan), hijau/merah **THP ↔ Gaji mutasi**. **Perhitungan Kemampuan Bayar** (bonus editable) menyatu di kartu yang sama; **Transaksi Pemasukan** ada di tab **Detail Transaksi**.
+- **Informasi Agunan** → detail properti **+ Perhitungan Agunan** (NPW × LTV) menyatu dalam satu kartu (di Summary).
 - **Penawaran KPR** → bunga *fixed → floating*, tenor menyesuaikan usia, plafon di-cap ke **min(NPW×LTV, kemampuan)** (sisanya jadi **tambahan DP**).
 - **Akad** → dana dibiayai, rincian DP saat akad, kantor cabang & tanggal akad.
-- **Gambar agunan** dari link listing (og:image) + **Preview dokumen** di dashboard.
+- **Gambar Agunan** (tab **Detail Agunan**) → galeri **semua foto properti** dari link (filter hanya rumah — bukan agen/iklan/peta), bisa **diklik untuk diperbesar** (lightbox + navigasi). Foto rumah juga tampil di **survey RM**. **Preview Dokumen** di tab tersendiri.
 
 ---
 

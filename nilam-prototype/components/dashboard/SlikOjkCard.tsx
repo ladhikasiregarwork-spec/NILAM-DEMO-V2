@@ -22,9 +22,9 @@ const VIEW_TITLE: Record<NonNullable<SlikOjkCardProps["view"]>, string> = {
   tunggakan: "SLIK OJK · Riwayat Tunggakan",
 };
 
-// Fixed column widths so header & data align; the table scrolls horizontally
-// inside the narrow card (like the Riwayat Tunggakan tab).
-const GRID = "grid grid-cols-[124px_88px_96px_46px_72px_88px_58px_30px] items-center gap-2";
+// Flexible (fr) columns so the table fills the full dashboard width; a min-width
+// keeps it readable + horizontally scrollable on narrow screens.
+const GRID = "grid grid-cols-[1.7fr_1.1fr_1.2fr_0.7fr_1fr_1.1fr_0.9fr_0.5fr] items-center gap-2";
 
 /** "8.25" → "8,25%", 21 → "21%". */
 const pct = (b?: number) =>
@@ -45,13 +45,13 @@ function kolColor(k: number): string {
 const KOL_DPD: Record<number, string> = { 1: "0 hari", 2: "1–90 hari", 3: "91–120 hari", 4: "121–180 hari", 5: "> 180 hari" };
 
 /**
- * Deterministic 12-month kolektibilitas history derived from the current kol:
+ * Deterministic kolektibilitas history (default 24 months, matching SLIK data):
  * the most recent months ramp up to the present class, older months are lancar.
  * (The SLIK Excel carries only the latest kol, so the timeline is reconstructed.)
  */
-function kolHistory(kol: number): number[] {
+function kolHistory(kol: number, months = 24): number[] {
   const bad = Math.max(0, kol - 1);
-  return Array.from({ length: 12 }, (_, m) => (m >= 12 - bad ? Math.min(kol, 2 + (m - (12 - bad))) : 1));
+  return Array.from({ length: months }, (_, m) => (m >= months - bad ? Math.min(kol, 2 + (m - (months - bad))) : 1));
 }
 
 /**
@@ -127,7 +127,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score, view = "summa
               <div className="flex flex-col gap-1.5">
                 {worst2.map((l, i) => {
                   const k = l.kualitas ?? 1;
-                  const hist = kolHistory(k);
+                  const hist = kolHistory(k, 12);
                   return (
                     <div key={`${l.lembaga}-${i}`} className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
@@ -147,7 +147,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score, view = "summa
             </div>
           ) : view === "detail" ? (
         <div className="overflow-x-auto scroll-thin">
-        <div className="min-w-[630px] overflow-hidden rounded-lg border border-bri-line/70">
+        <div className="w-full min-w-[640px] overflow-hidden rounded-lg border border-bri-line/70">
           <div className={cn(GRID, "bg-bri-bg/70 px-2 py-1 text-[7px] font-semibold uppercase tracking-[0.04em] text-bri-muted")}>
             <span>Lembaga / Jenis</span>
             <span className="text-right">Plafon</span>
@@ -200,10 +200,10 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score, view = "summa
         </div>
         </div>
           ) : (
-            /* Riwayat Tunggakan — 12-bulan kolektibilitas per fasilitas */
+            /* Riwayat Tunggakan — 24-bulan kolektibilitas per fasilitas */
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2 rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
-                <span className="text-[8.5px] text-bri-muted">Pernah Menunggak (kol &gt; 1)</span>
+                <span className="text-[8.5px] text-bri-muted">Pernah Menunggak (kol &gt; 1) · 24 bln terakhir</span>
                 <span className="text-[10px] font-bold text-bri-ink">
                   {pernahMenunggak} / {loans.length} fasilitas
                   <span className="ml-1.5 font-medium text-bri-muted">· tunggakan terburuk {KOL_DPD[worstKol] ?? "—"}</span>
@@ -211,19 +211,19 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score, view = "summa
               </div>
 
               <div className="overflow-x-auto scroll-thin">
-                <div className="min-w-[420px]">
-                  <div className="grid grid-cols-[1.4fr_repeat(12,1fr)] items-center gap-0.5 px-1 pb-0.5 text-[6px] font-semibold uppercase text-bri-muted">
+                <div className="w-full min-w-[820px]">
+                  <div className="grid grid-cols-[1.4fr_repeat(24,1fr)] items-center gap-0.5 px-1 pb-0.5 text-[6px] font-semibold uppercase text-bri-muted">
                     <span>Fasilitas</span>
-                    {Array.from({ length: 12 }, (_, i) => <span key={i} className="text-center">{i === 0 ? "12bln" : i === 11 ? "kini" : ""}</span>)}
+                    {Array.from({ length: 24 }, (_, i) => <span key={i} className="text-center">{i === 0 ? "24bln" : i === 23 ? "kini" : ""}</span>)}
                   </div>
                   {loans.map((l, i) => {
-                    const hist = kolHistory(l.kualitas ?? 1);
+                    const hist = kolHistory(l.kualitas ?? 1, 24);
                     return (
-                      <div key={`${l.lembaga}-${i}`} className="grid grid-cols-[1.4fr_repeat(12,1fr)] items-center gap-0.5 border-t border-bri-line/40 px-1 py-1">
+                      <div key={`${l.lembaga}-${i}`} className="grid grid-cols-[1.4fr_repeat(24,1fr)] items-center gap-0.5 border-t border-bri-line/40 px-1 py-1">
                         <span className="min-w-0 truncate text-[7.5px] text-bri-ink" title={l.lembaga}>{l.lembaga}</span>
                         {hist.map((k, m) => (
                           <span key={m} className="flex justify-center">
-                            <span className={cn("h-2.5 w-full max-w-[14px] rounded-[2px]", kolColor(k))} title={`Kol ${k} · ${KOL_DPD[k]}`} />
+                            <span className={cn("h-2.5 w-full max-w-[14px] rounded-[2px]", kolColor(k))} title={`Bln ${m + 1} · Kol ${k} · ${KOL_DPD[k]}`} />
                           </span>
                         ))}
                       </div>
