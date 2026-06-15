@@ -72,7 +72,7 @@ export function InstallmentCard({
         <div className="flex items-center gap-1">
           <Calculator size={11} className="text-white" strokeWidth={2} />
           <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-white/80">
-            Calculate Installment Payments
+            Perhitungan Kemampuan Bayar
           </span>
         </div>
         <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[7.5px] font-semibold text-white/90">Kemampuan Bayar</span>

@@ -6,6 +6,8 @@ import type { AgunanData } from "@/types/agunan";
 
 interface AgunanInfoCardProps {
   agunan?: AgunanData;
+  /** Extra content rendered inside this card, below the info (e.g. Perhitungan Agunan). */
+  footer?: React.ReactNode;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -21,7 +23,7 @@ function Row({ label, value }: { label: string; value: string }) {
  * AgunanInfoCard — "INFORMASI AGUNAN". Collateral property details (manual or
  * extracted from a Rumah123 link). NPW kini ada di kartu Perhitungan Agunan.
  */
-export function AgunanInfoCard({ agunan }: AgunanInfoCardProps) {
+export function AgunanInfoCard({ agunan, footer }: AgunanInfoCardProps) {
   const hasAgunan = !!agunan && (agunan.harga != null || agunan.kelurahan != null);
   const lokasi = agunan
     ? [agunan.kelurahan, agunan.kecamatan, agunan.kota, agunan.provinsi, agunan.kodepos]
@@ -83,6 +85,9 @@ export function AgunanInfoCard({ agunan }: AgunanInfoCardProps) {
           <span className="text-[8px] text-bri-muted">{lokasi}</span>
         </div>
       )}
+
+      {/* Perhitungan Agunan — di dalam kartu Informasi Agunan */}
+      {footer && <div className="mt-2 border-t border-bri-line pt-2">{footer}</div>}
     </div>
   );
 }

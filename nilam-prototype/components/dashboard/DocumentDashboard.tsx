@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { cn } from "@/lib/cn";
 import { useOrchestrationFeed } from "@/hooks/useOrchestrationFeed";
 import { deriveDocumentStatuses } from "@/data/documents";
 import type { OrchestrationEvent } from "@/types/orchestration";
@@ -18,9 +20,19 @@ import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
 import { SlikOjkCard } from "./SlikOjkCard";
 import { MatchingCard } from "./MatchingCard";
+import { InstallmentCard } from "./InstallmentCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 import { AgunanTabCard } from "./AgunanTabCard";
 import { SummaryDecisionCard } from "./SummaryDecisionCard";
+
+const BIG_TABS = [
+  { id: "summary", label: "Summary" },
+  { id: "transaksi", label: "Detail Transaksi" },
+  { id: "slik", label: "Detail SLIK" },
+  { id: "agunan", label: "Detail Agunan" },
+  { id: "preview", label: "Preview Dokumen" },
+] as const;
+type BigTab = (typeof BIG_TABS)[number]["id"];
 
 import { EMPLOYMENT_AGREEMENT } from "@/data/profileFixtures";
 import { SLIK_LOANS, SLIK_TOTAL_ANGSURAN } from "@/data/slikLoansFixtures";
@@ -61,6 +73,7 @@ interface DocumentDashboardProps {
  */
 export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
+  const [tab, setTab] = useState<BigTab>("summary");
 
   const ocrStatus = statusOf("ocr");
   const slikStatus = statusOf("slik");
@@ -134,43 +147,130 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto scroll-thin bg-[#F5F7FA] p-3">
-      {/* DATA ALREADY UPLOAD — full width */}
+      {/* DATA ALREADY UPLOAD — pinned above the big tabs */}
       <UploadedDocsStrip statuses={docStatuses} />
 
-      {/* Row 2: USER INFORMATION (+ employment) | INCOME NASABAH (lebih lebar) */}
-      <div className="grid grid-cols-[250px_minmax(0,1fr)] items-start gap-3">
+      {/* Two big tabs: Summary | Detail */}
+      <div className="flex shrink-0 gap-1 rounded-pill border border-bri-line bg-white p-1 shadow-soft">
+        {BIG_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "flex-1 rounded-pill px-3 py-1.5 text-[11px] font-semibold transition-colors",
+              tab === t.id ? "bg-bri-navy text-white shadow-soft" : "text-bri-muted hover:text-bri-ink",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── SUMMARY ─────────────────────────────────────────────────────── */}
+      {tab === "summary" && (
         <div className="flex flex-col gap-3">
-          <UserInformationCard
-            status={ocrStatus}
-            ktp={ocr.ktp}
-            kk={ocr.kk}
-            nama={userInput?.nama}
-            missing={!uploads.ktp && !uploads.kk}
-          />
-          <EmploymentAgreementCard
-            status={ocrStatus}
-            agreement={skAgreement}
-            title="Company Employment Certificate"
-            missing={!uploads.sk_perusahaan}
-            sourceLabel={sk ? "Hasil OCR" : undefined}
-          />
+          {/* USER INFORMATION (+ employment) | SUMMARY INCOME + KEMAMPUAN BAYAR */}
+          <div className="grid grid-cols-[250px_minmax(0,1fr)] items-start gap-3">
+            <div className="flex flex-col gap-3">
+              <UserInformationCard
+                status={ocrStatus}
+                ktp={ocr.ktp}
+                kk={ocr.kk}
+                nama={userInput?.nama}
+                missing={!uploads.ktp && !uploads.kk}
+              />
+              <EmploymentAgreementCard
+                status={ocrStatus}
+                agreement={skAgreement}
+                title="Company Employment Certificate"
+                missing={!uploads.sk_perusahaan}
+                sourceLabel={sk ? "Hasil OCR" : undefined}
+              />
+            </div>
+            <div className="min-w-0">
+              {/* Income Nasabah — Summary Income + Perhitungan Kemampuan Bayar (bonus editable) di dalam satu kartu */}
+              <MatchingCard
+                status={ocrStatus}
+                mutasi={ocr.mutasi}
+                slip={ocr.slipGaji}
+                missing={!uploads.slip_gaji || !uploads.mutasi}
+                mode="rekap"
+                footer={
+                  <InstallmentCard
+                    status={thpStatus}
+                    gajiBulanan={income.gajiBulanan}
+                    thrTahunan={income.thrTahunan}
+                    bonusTahunan={income.bonusTahunan}
+                    slikAngsuran={slikTotalAngsuran}
+                    agunan={agunan}
+                    uangMuka={userInput?.uangMuka}
+                    jangkaWaktu={userInput?.jangkaWaktu}
+                  />
+                }
+              />
+            </div>
+          </div>
+
+          {/* SLIK Ringkasan | INFORMASI + PERHITUNGAN AGUNAN | RINGKASAN & KEPUTUSAN */}
+          <div className="grid grid-cols-3 items-start gap-3">
+            <SlikOjkCard status={slikStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="summary" />
+            <AgunanTabCard
+              status={thpStatus}
+              agunan={agunan}
+              uangMuka={userInput?.uangMuka}
+              npw={npw}
+              npwLand={npwLand}
+              klas={agunanKlas}
+              setKlas={setAgunanKlas}
+              view="informasi"
+            />
+            <SummaryDecisionCard
+              status={thpStatus}
+              kemampuan={kemampuan}
+              angsuranKpr={kprAngsuran}
+              score={creditResult.score}
+              grade={creditResult.grade}
+              breakdown={{
+                harga: hargaRumah,
+                dpAwal,
+                kebutuhan,
+                npw,
+                ltv,
+                plafonAgunan,
+                tenorBulan: tenorTahun * 12,
+                gajiBulanan: income.gajiBulanan,
+                thrTahunan: income.thrTahunan,
+                bonusTahunan: income.bonusTahunan,
+                slikAngsuran: slikTotalAngsuran,
+                factors: creditResult.factors,
+              }}
+            />
+          </div>
         </div>
+      )}
+
+      {/* ── DETAIL TRANSAKSI — Transaksi Pemasukan ─────────────────────── */}
+      {tab === "transaksi" && (
         <MatchingCard
           status={ocrStatus}
           mutasi={ocr.mutasi}
           slip={ocr.slipGaji}
           missing={!uploads.slip_gaji || !uploads.mutasi}
+          mode="transaksi"
         />
-      </div>
+      )}
 
-      {/* Row 3: SLIK (2 tab) | AGUNAN (2 tab) | RINGKASAN & KEPUTUSAN */}
-      <div className="grid grid-cols-3 items-start gap-3">
-        <SlikOjkCard
-          status={slikStatus}
-          loans={slikLoans}
-          totalAngsuran={slikTotalAngsuran}
-          score={creditResult.score}
-        />
+      {/* ── DETAIL SLIK — Detail Fasilitas + Riwayat Tunggakan ──────────── */}
+      {tab === "slik" && (
+        <div className="flex flex-col gap-3">
+          <SlikOjkCard status={slikStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="detail" />
+          <SlikOjkCard status={slikStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="tunggakan" />
+        </div>
+      )}
+
+      {/* ── DETAIL AGUNAN — Gambar Agunan + Survey Harga Tanah Sekitar ──── */}
+      {tab === "agunan" && (
         <AgunanTabCard
           status={thpStatus}
           agunan={agunan}
@@ -179,32 +279,12 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
           npwLand={npwLand}
           klas={agunanKlas}
           setKlas={setAgunanKlas}
+          view="detail"
         />
-        <SummaryDecisionCard
-          status={thpStatus}
-          kemampuan={kemampuan}
-          angsuranKpr={kprAngsuran}
-          score={creditResult.score}
-          grade={creditResult.grade}
-          breakdown={{
-            harga: hargaRumah,
-            dpAwal,
-            kebutuhan,
-            npw,
-            ltv,
-            plafonAgunan,
-            tenorBulan: tenorTahun * 12,
-            gajiBulanan: income.gajiBulanan,
-            thrTahunan: income.thrTahunan,
-            bonusTahunan: income.bonusTahunan,
-            slikAngsuran: slikTotalAngsuran,
-            factors: creditResult.factors,
-          }}
-        />
-      </div>
+      )}
 
-      {/* PREVIEW DOKUMEN — dokumen terupload, di-rename sesuai klasifikasi */}
-      <PreviewDocsCard docs={previewDocs ?? []} />
+      {/* ── PREVIEW DOKUMEN ────────────────────────────────────────────── */}
+      {tab === "preview" && <PreviewDocsCard docs={previewDocs ?? []} />}
     </div>
   );
 }

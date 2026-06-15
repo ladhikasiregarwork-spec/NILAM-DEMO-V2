@@ -22,6 +22,8 @@ export interface AgunanData {
   sumber?: "link" | "manual";
   /** Original listing URL when sumber === "link". */
   url?: string;
-  /** Property photo URL (from the listing's og:image), when sourced from a link. */
+  /** Primary property photo URL (from the listing's og:image), when sourced from a link. */
   imageUrl?: string;
+  /** All property photo URLs from the listing (gallery). */
+  imageUrls?: string[];
 }

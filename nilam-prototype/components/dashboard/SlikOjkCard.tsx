@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Landmark, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
@@ -13,7 +12,15 @@ interface SlikOjkCardProps {
   totalAngsuran: number;
   /** Credit score from the bureau pull. */
   score: number;
+  /** Which section to render. */
+  view?: "summary" | "detail" | "tunggakan";
 }
+
+const VIEW_TITLE: Record<NonNullable<SlikOjkCardProps["view"]>, string> = {
+  summary: "SLIK OJK · Ringkasan",
+  detail: "SLIK OJK · Detail Fasilitas",
+  tunggakan: "SLIK OJK · Riwayat Tunggakan",
+};
 
 // Fixed column widths so header & data align; the table scrolls horizontally
 // inside the narrow card (like the Riwayat Tunggakan tab).
@@ -53,9 +60,8 @@ function kolHistory(kol: number): number[] {
  * angsuran, active status, collectibility — plus the TOTAL monthly installment
  * of active facilities. Gated until the SLIK retrieval step succeeds.
  */
-export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCardProps) {
+export function SlikOjkCard({ status, loans, totalAngsuran, score, view = "summary" }: SlikOjkCardProps) {
   const ready = status === "success";
-  const [stab, setStab] = useState<"ringkasan" | "detail" | "tunggakan">("ringkasan");
 
   const activeLoans = loans.filter((l) => l.aktif !== false);
   const worstKol = loans.reduce((m, l) => Math.max(m, l.kualitas ?? 1), 1);
@@ -70,7 +76,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCard
         <div className="flex items-center gap-1">
           <Landmark size={11} className="text-bri-navy" strokeWidth={2} />
           <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-bri-muted">
-            SLIK OJK · Riwayat Kredit
+            {VIEW_TITLE[view]}
           </span>
         </div>
         {ready && (
@@ -88,24 +94,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCard
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Internal tabs: Ringkasan | Detail | Riwayat Tunggakan */}
-          <div className="flex gap-1 rounded-pill border border-bri-line bg-bri-bg/40 p-0.5">
-            {([["ringkasan", "Summary"], ["detail", "Detail"], ["tunggakan", "Riwayat Tunggakan"]] as ["ringkasan" | "detail" | "tunggakan", string][]).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setStab(id)}
-                className={cn(
-                  "flex-1 rounded-pill px-2 py-1 text-[9px] font-semibold transition-colors",
-                  stab === id ? "bg-bri-navy text-white" : "text-bri-muted hover:text-bri-ink",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {stab === "ringkasan" ? (
+          {view === "summary" ? (
             <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
@@ -156,7 +145,7 @@ export function SlikOjkCard({ status, loans, totalAngsuran, score }: SlikOjkCard
               </div>
             </div>
             </div>
-          ) : stab === "detail" ? (
+          ) : view === "detail" ? (
         <div className="overflow-x-auto scroll-thin">
         <div className="min-w-[630px] overflow-hidden rounded-lg border border-bri-line/70">
           <div className={cn(GRID, "bg-bri-bg/70 px-2 py-1 text-[7px] font-semibold uppercase tracking-[0.04em] text-bri-muted")}>

@@ -20,8 +20,10 @@ export interface ParsedListing {
   kota?: string;
   /** schema.org addressLocality, e.g. "Bojong Gede, Bogor". */
   lokalitas?: string;
-  /** Listing photo URL (og:image / schema.org image). */
+  /** Primary listing photo URL (og:image / schema.org image). */
   imageUrl?: string;
+  /** All listing photo URLs (gallery). */
+  imageUrls?: string[];
 }
 
 /** Parse a captured numeric string ("72" / "72,5") into a number. */
@@ -75,6 +77,48 @@ export function parseRumah123Html(html: string): ParsedListing {
     /"image"\s*:\s*\[\s*"(https:[^"]+?)"/i,
   ])?.replace(/\\\//g, "/");
 
+  // Property gallery only (house exterior + interiors) — NOT page-wide images
+  // (agent photos, ads, map, related listings). Take URLs from the listing's own
+  // photo array; only fall back to a page-wide scan if no array is found.
+  const unesc = html.replace(/\\\//g, "/");
+  const EXCLUDE = /logo|icon|avatar|sprite|favicon|placeholder|maps?\.|google|gstatic|\.svg|agent|agen|profile|broker|banner|\/ads?\/|iklan|watermark|sponsor|related|similar|thumb-?s?mall/i;
+  const findUrls = (s: string) => s.match(/https?:\/\/[^"'\s),\\]+?\.(?:jpe?g|png|webp)(?:\?[^"'\s),\\]*)?/gi) || [];
+  // URLs inside a "<key>": [ ... ] JSON array (the property photo gallery).
+  const arrayOf = (key: string): string[] => {
+    const m = unesc.match(new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]{0,5000}?)\\]`, "i"));
+    return m ? findUrls(m[1]) : [];
+  };
+  let imageUrls = [
+    ...arrayOf("photos"),
+    ...arrayOf("images"),
+    ...arrayOf("galleryImages"),
+    ...arrayOf("propertyPhotos"),
+    ...arrayOf("media"),
+    ...arrayOf("image"),
+  ];
+  if (imageUrls.length === 0) imageUrls = findUrls(unesc); // fallback: page-wide
+
+  const host = (() => {
+    try {
+      return imageUrl ? new URL(imageUrl).host : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  imageUrls = Array.from(new Set(imageUrls)).filter((u) => !EXCLUDE.test(u));
+  if (host) {
+    const sameHost = imageUrls.filter((u) => {
+      try {
+        return new URL(u).host === host;
+      } catch {
+        return false;
+      }
+    });
+    if (sameHost.length) imageUrls = sameHost;
+  }
+  if (imageUrl) imageUrls = [imageUrl, ...imageUrls.filter((u) => u !== imageUrl)];
+  imageUrls = imageUrls.slice(0, 16);
+
   // The PROPERTY's PostalAddress sits just before its offer/price block. Anchor
   // extraction there so we don't accidentally grab the agent/organization
   // address (e.g. the Rumah123 office in Jakarta) elsewhere on the page.
@@ -96,5 +140,5 @@ export function parseRumah123Html(html: string): ParsedListing {
     }
   }
 
-  return { harga, luasTanah, luasBangunan, lat, lon, provinsi, kecamatan, kota, lokalitas, imageUrl };
+  return { harga, luasTanah, luasBangunan, lat, lon, provinsi, kecamatan, kota, lokalitas, imageUrl, imageUrls };
 }

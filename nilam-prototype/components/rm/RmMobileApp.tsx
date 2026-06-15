@@ -10,6 +10,7 @@ import {
   XCircle,
   ClipboardList,
   Inbox,
+  Images,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
@@ -52,6 +53,7 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
   const npw = live?.npw ?? harga;
   const nama = live?.nama?.trim() || "Nasabah (pengajuan aktif)";
   const kota = live?.agunan?.kota || "—";
+  const imgs = live?.agunan?.imageUrls?.length ? live.agunan.imageUrls : live?.agunan?.imageUrl ? [live.agunan.imageUrl] : [];
   const decided = live?.surveyStatus === "approved" ? "approved" : live?.surveyStatus === "rejected" ? "rejected" : "none";
 
   const [formValue, setFormValue] = useState<number | "">("");
@@ -117,6 +119,25 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
               <h3 className="text-[13px] font-bold text-bri-ink">{nama}</h3>
               <p className="flex items-center gap-1 text-[8.5px] text-bri-muted"><MapPin size={9} /> {kota} · diajukan hari ini</p>
             </div>
+
+            {/* Foto rumah yang disurvey */}
+            {imgs.length > 0 && (
+              <div className="rounded-lg border border-bri-line bg-bri-bg/40 p-1.5">
+                <p className="mb-1 flex items-center gap-1 text-[8px] font-semibold uppercase tracking-[0.06em] text-bri-muted">
+                  <Images size={10} className="text-bri-navy" /> Foto Rumah Disurvey · {imgs.length} foto
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgs[0]} alt="Foto rumah disurvey" referrerPolicy="no-referrer" className="h-28 w-full rounded-md border border-bri-line object-cover" />
+                {imgs.length > 1 && (
+                  <div className="mt-1 grid grid-cols-4 gap-1">
+                    {imgs.slice(1, 5).map((u, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={i} src={u} alt={`Foto rumah ${i + 2}`} referrerPolicy="no-referrer" className="h-10 w-full rounded border border-bri-line object-cover" />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Collateral facts */}
             <div className="grid grid-cols-2 gap-1.5">

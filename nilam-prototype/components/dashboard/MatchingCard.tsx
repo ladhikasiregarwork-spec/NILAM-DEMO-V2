@@ -13,6 +13,10 @@ interface MatchingCardProps {
   mutasi?: MutasiExtract;
   slip?: SlipGajiExtract;
   missing?: boolean;
+  /** Which section to render — recap (Summary Income) or raw transactions. */
+  mode?: "rekap" | "transaksi";
+  /** Extra content rendered inside this card, below the recap (mode="rekap"). */
+  footer?: React.ReactNode;
 }
 
 const TXN_GRID = "grid grid-cols-[60px_1fr_1fr_1fr_2.2fr] items-center gap-1.5";
@@ -72,11 +76,10 @@ function slipDefault(r: MonthlyRecap, f: Field): number {
  * MUTASI + total mutasi income) above the raw income transactions. Amounts
  * editable; green/red flags whether slip matches mutasi; Status = Edited.
  */
-export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProps) {
+export function MatchingCard({ status, mutasi, slip, missing, mode = "rekap", footer }: MatchingCardProps) {
   const ready = status === "success" && !missing;
   const { txns, recaps } = useMemo(() => buildMatch(mutasi, slip), [mutasi, slip]);
   const [edits, setEdits] = useState<Record<string, number>>({});
-  const [mtab, setMtab] = useState<"rekap" | "transaksi">("rekap");
 
   // Effective value = edited override, else the OCR default.
   const val = (r: MonthlyRecap, f: Field) => edits[`${r.key}|${f}`] ?? slipDefault(r, f);
@@ -104,7 +107,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
       <div className="mb-1.5 flex items-center gap-1">
         <GitCompareArrows size={11} className="text-bri-navy" strokeWidth={2} />
         <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-bri-muted">
-          Income Nasabah
+          {mode === "transaksi" ? "Transaksi Pemasukan" : "Income Nasabah"}
         </span>
       </div>
 
@@ -123,25 +126,8 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Internal tabs: Summary Income | Transaksi Pemasukan */}
-          <div className="flex gap-1 rounded-pill border border-bri-line bg-bri-bg/40 p-0.5">
-            {([["rekap", "Summary Income"], ["transaksi", "Transaksi Pemasukan"]] as ["rekap" | "transaksi", string][]).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setMtab(id)}
-                className={cn(
-                  "flex-1 rounded-pill px-2 py-1 text-[9px] font-semibold transition-colors",
-                  mtab === id ? "bg-bri-navy text-white" : "text-bri-muted hover:text-bri-ink",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {/* Monthly recap — slip breakdown (THP computed) vs mutasi income */}
-          {mtab === "rekap" && (
+          {mode === "rekap" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Summary Income <span className="font-normal normal-case text-bri-muted/70">· rincian slip gaji per bulan · nominal bisa diedit · THP otomatis</span>
@@ -208,7 +194,7 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
           )}
 
           {/* Income transactions */}
-          {mtab === "transaksi" && (
+          {mode === "transaksi" && (
           <div>
             <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Transaksi Pemasukan (dari Mutasi)
@@ -236,6 +222,11 @@ export function MatchingCard({ status, mutasi, slip, missing }: MatchingCardProp
           </div>
           )}
         </div>
+      )}
+
+      {/* Perhitungan Kemampuan Bayar — di dalam kartu Income Nasabah */}
+      {mode === "rekap" && footer && (
+        <div className="mt-3 border-t border-bri-line pt-3">{footer}</div>
       )}
     </div>
   );

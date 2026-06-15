@@ -93,6 +93,7 @@ export async function POST(req: Request) {
     lat: parsed.lat,
     lon: parsed.lon,
     imageUrl: parsed.imageUrl,
+    imageUrls: parsed.imageUrls,
     sumber: "link",
     url,
   };
