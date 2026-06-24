@@ -113,6 +113,8 @@ export interface SlikLoan {
   tanggalJatuhTempo?: string;
   /** True when the facility is still active (kondisi 0); false = lunas/non-aktif. */
   aktif?: boolean;
+  /** Arrears: tunggakan pokok + bunga. */
+  tunggakan?: number;
 }
 
 /** Parsed SLIK report (from the SLIK CSV), keyed by NIK. */
@@ -121,6 +123,8 @@ export interface SlikReport {
   namaDebitur?: string;
   loans: SlikLoan[];
   totalAngsuran: number;
+  /** Total arrears across facilities (tunggakan pokok + bunga). */
+  totalTunggakan?: number;
   /** Worst collectibility across facilities (1 best … 5 macet). */
   kolekTerburuk: number;
   totalFasilitas: number;
