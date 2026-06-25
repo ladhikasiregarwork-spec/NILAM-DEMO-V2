@@ -39,7 +39,7 @@ export function SurveyScreen({ status, agunan, note, surveyValue, onEditAgunan }
         <div>
           <p className="text-[13px] font-bold text-bri-ink">Hasil Survey: Belum Memenuhi Syarat</p>
           <p className="mt-1 text-[10px] leading-relaxed text-bri-muted">
-            Mohon maaf, agunan Anda belum dapat disetujui berdasarkan hasil survey Relationship Manager.
+            Mohon maaf, agunan Anda belum dapat disetujui berdasarkan hasil survey Collateral Appraisal.
           </p>
         </div>
         {note && (
@@ -75,7 +75,7 @@ export function SurveyScreen({ status, agunan, note, surveyValue, onEditAgunan }
       <div className="text-center">
         <p className="text-[13px] font-bold text-bri-ink">Menunggu Survey Agunan</p>
         <p className="mx-auto mt-1 max-w-[240px] text-[10px] leading-relaxed text-bri-muted">
-          Karena nilai agunan ≥ Rp500 juta, agunan Anda akan disurvey oleh Relationship Manager kami sebelum penawaran
+          Agunan Anda akan disurvey oleh tim Collateral Appraisal kami sebelum penawaran
           diterbitkan.
         </p>
       </div>

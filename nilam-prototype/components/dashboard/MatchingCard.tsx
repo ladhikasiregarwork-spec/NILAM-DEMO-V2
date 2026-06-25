@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { GitCompareArrows, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
+import { txnTable } from "./txnTableStyles";
 import { buildMatch, type MonthlyRecap } from "@/engines/matching/matchSlipMutasi";
 import type { NodeStatus } from "@/types/orchestration";
 import type { MutasiExtract, SlipGajiExtract } from "@/types/ocrExtract";
@@ -19,7 +20,9 @@ interface MatchingCardProps {
   footer?: React.ReactNode;
 }
 
-const TXN_GRID = "grid grid-cols-[60px_1fr_1fr_1fr_2.2fr] items-center gap-1.5";
+// Tgl · Gaji · THR · Bonus · Remark (Detail Transaksi tab). Shared grid so this
+// table lines up column-for-column with MutasiRekeningCard below it.
+const TXN_GRID = txnTable.grid;
 // Bulan · Slip[Gaji Pokok, Tunjangan, THR, Bonus, Pend. Lainnya, Potongan, THP] · Mutasi[Gaji, Tunjangan, THR, Bonus, Total Income] · Status
 const REC_GRID = "grid grid-cols-[64px_repeat(12,1fr)_58px] items-center gap-1";
 
@@ -196,25 +199,25 @@ export function MatchingCard({ status, mutasi, slip, missing, mode = "rekap", fo
           {/* Income transactions */}
           {mode === "transaksi" && (
           <div>
-            <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
+            <p className="mb-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
               Transaksi Pemasukan (dari Mutasi)
             </p>
-            <div className="overflow-hidden rounded-lg border border-bri-line/70">
-              <div className={cn(TXN_GRID, "bg-bri-bg/70 px-2 py-1 text-[7.5px] font-semibold uppercase tracking-[0.05em] text-bri-muted")}>
-                <span>Tgl Mutasi</span>
-                <span className="text-right">Gaji</span>
-                <span className="text-right">THR</span>
-                <span className="text-right">Bonus</span>
-                <span>Remark</span>
+            <div className={txnTable.box}>
+              <div className={cn(TXN_GRID, txnTable.head)}>
+                <span className="text-center">Tgl Mutasi</span>
+                <span className="text-center">Gaji</span>
+                <span className="text-center">THR</span>
+                <span className="text-center">Bonus</span>
+                <span className="text-center">Remark</span>
               </div>
-              <div className="max-h-[130px] overflow-y-auto scroll-thin">
+              <div className="max-h-[160px] overflow-y-auto scroll-thin">
                 {txns.map((t, i) => (
-                  <div key={i} className={cn(TXN_GRID, "border-t border-bri-line/50 px-2 py-1 text-[8.5px]")}>
-                    <span className="tabular-nums text-bri-ink">{t.tanggal}</span>
-                    <span className="text-right tabular-nums text-emerald-600">{t.gaji ? formatRupiah(t.gaji) : "–"}</span>
-                    <span className="text-right tabular-nums text-bri-ink">{t.thr ? formatRupiah(t.thr) : "–"}</span>
-                    <span className="text-right tabular-nums text-bri-ink">{t.bonus ? formatRupiah(t.bonus) : "–"}</span>
-                    <span className="truncate text-bri-muted" title={t.remark}>{t.remark}</span>
+                  <div key={i} className={cn(TXN_GRID, txnTable.row)}>
+                    <span className={txnTable.date}>{t.tanggal}</span>
+                    <span className={cn(txnTable.money, t.gaji ? txnTable.credit : "text-bri-muted/40")}>{t.gaji ? formatRupiah(t.gaji) : "–"}</span>
+                    <span className={cn(txnTable.money, t.thr ? txnTable.credit : "text-bri-muted/40")}>{t.thr ? formatRupiah(t.thr) : "–"}</span>
+                    <span className={cn(txnTable.money, t.bonus ? txnTable.credit : "text-bri-muted/40")}>{t.bonus ? formatRupiah(t.bonus) : "–"}</span>
+                    <span className={txnTable.remark} title={t.remark}>{t.remark}</span>
                   </div>
                 ))}
               </div>

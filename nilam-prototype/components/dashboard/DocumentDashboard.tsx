@@ -20,6 +20,7 @@ import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
 import { SlikOjkCard } from "./SlikOjkCard";
 import { MatchingCard } from "./MatchingCard";
+import { MutasiRekeningCard } from "./MutasiRekeningCard";
 import { InstallmentCard } from "./InstallmentCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 import { AgunanTabCard } from "./AgunanTabCard";
@@ -250,15 +251,22 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
         </div>
       )}
 
-      {/* ── DETAIL TRANSAKSI — Transaksi Pemasukan ─────────────────────── */}
+      {/* ── DETAIL TRANSAKSI — Transaksi Pemasukan + Detail Mutasi Rekening ── */}
       {tab === "transaksi" && (
-        <MatchingCard
-          status={ocrStatus}
-          mutasi={ocr.mutasi}
-          slip={ocr.slipGaji}
-          missing={!uploads.slip_gaji || !uploads.mutasi}
-          mode="transaksi"
-        />
+        <div className="flex flex-col gap-3">
+          <MatchingCard
+            status={ocrStatus}
+            mutasi={ocr.mutasi}
+            slip={ocr.slipGaji}
+            missing={!uploads.slip_gaji || !uploads.mutasi}
+            mode="transaksi"
+          />
+          <MutasiRekeningCard
+            status={ocrStatus}
+            mutasi={ocr.mutasi}
+            missing={!uploads.mutasi}
+          />
+        </div>
       )}
 
       {/* ── DETAIL SLIK — Detail Fasilitas + Riwayat Tunggakan ──────────── */}

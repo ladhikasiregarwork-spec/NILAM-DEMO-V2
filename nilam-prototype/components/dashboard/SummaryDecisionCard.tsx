@@ -158,7 +158,15 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
             valueNote={layak != null && <span className={cn("block text-[7px] font-semibold", layak ? "text-emerald-600" : "text-red-500")}>{layak ? "angsuran KPR layak" : "angsuran KPR melebihi"}</span>}
           >
             <DetailRow label="Gaji / bulan" value={formatRupiah(b.gajiBulanan)} />
-            <DetailRow label="THR / 12" value={`+ ${formatRupiah(Math.round(b.thrTahunan / 12))}`} />
+            {/* THR — full detected amount, contributes /12 (mirrors the Bonus row) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[8px] text-bri-muted">THR / 12</span>
+              <span className="flex items-center gap-1">
+                <span className="text-[8px] text-bri-muted">+</span>
+                <span className="text-[8px] tabular-nums text-bri-ink">{formatRupiah(b.thrTahunan)}</span>
+                <span className="text-[7px] text-bri-muted">/12</span>
+              </span>
+            </div>
             {/* Bonus — editable (default dari OCR) */}
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1 text-[8px] text-bri-muted">Bonus / 12 <Pencil size={7} className="text-bri-muted/60" /></span>

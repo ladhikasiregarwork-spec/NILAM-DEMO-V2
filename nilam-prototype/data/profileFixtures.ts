@@ -21,12 +21,12 @@ export const CUSTOMER_PROFILE: CustomerProfile = {
   gender: "Laki-laki",
   tanggalLahir: "08/11/1988",
   perusahaan: "PT Sinar Mandiri Sejahtera",
-  jabatan: "Senior Supervisor Produksi",
+  jabatan: "Officer",
 };
 
 export const EMPLOYMENT_AGREEMENT: EmploymentAgreement = {
   perusahaan: "PT Sinar Mandiri Sejahtera",
-  jabatan: "Senior Supervisor Produksi",
+  jabatan: "Officer",
   statusKepegawaian: "Karyawan Tetap",
   masaKerja: "5 tahun 3 bulan",
   gajiPokok: 10_000_000,

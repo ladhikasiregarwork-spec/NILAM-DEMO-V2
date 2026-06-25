@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { FlowStep, PersonaConfig, SurveyStatus } from "@/types/flow";
-import { SURVEY_THRESHOLD } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
 import type { OcrResults, ClassifyResult, PreviewDoc } from "@/types/ocrExtract";
@@ -716,9 +715,10 @@ export function useNilamFlow() {
     // Read the LATEST state from the ref (never a stale closure).
     const s = stateRef.current;
 
-    // Collateral price decides whether an RM survey gate applies.
+    // Every application with collateral goes to the Collateral Appraisal survey
+    // queue — so any collateral value can be simulated end-to-end in the demo.
     const hargaAgunan = s.agunan?.harga ?? 0;
-    const needsSurvey = hargaAgunan >= SURVEY_THRESHOLD;
+    const needsSurvey = hargaAgunan > 0;
 
     // Derive joint at submit time from the current jointAnswer.
     const joint = s.jointAnswer === "ya";
@@ -763,8 +763,8 @@ export function useNilamFlow() {
     };
 
     // Run the pipeline. Only advance if this specific orchestrator instance is
-    // still the active one. Collateral ≥ threshold goes to the RM survey queue
-    // (waiting screen); otherwise the offer is released straight away.
+    // still the active one. Any application with collateral goes to the
+    // Collateral Appraisal survey queue (waiting screen) before the offer.
     orch.run(s.persona, outputs, emit).then(() => {
       if (orchestratorRef.current !== orch) return;
       if (needsSurvey) {

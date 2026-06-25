@@ -50,7 +50,7 @@ export function OpeningScreen({ onStart, personaSelected = true }: OpeningScreen
       {/* Wordmark */}
       <div className="text-center">
         <p className="text-lg font-bold tracking-widest text-bri-ink">NILAM</p>
-        <p className="mt-0.5 text-[10px] text-bri-muted">New Intelligent Loan Application</p>
+        <p className="mt-0.5 text-[10px] text-bri-muted">New Intelligent Loan Application Management</p>
       </div>
 
       {/* Tagline */}

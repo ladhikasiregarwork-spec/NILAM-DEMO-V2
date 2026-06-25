@@ -100,7 +100,15 @@ export function InstallmentCard({
           {/* Breakdown */}
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
             <Row label="Gaji / bulan" value={formatRupiah(gajiBulanan)} />
-            <Row label="THR / 12" value={`+ ${formatRupiah(Math.round(thrTahunan / 12))}`} />
+            {/* THR — full detected amount, contributes /12 (mirrors the Bonus row) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] text-white/70">THR / 12</span>
+              <span className="flex items-center gap-1">
+                <span className="text-[10px] text-white/90">+</span>
+                <span className="text-[9px] font-medium tabular-nums text-white">{formatRupiah(thrTahunan)}</span>
+                <span className="text-[8px] text-white/50">/12</span>
+              </span>
+            </div>
             {/* Bonus — editable */}
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1 text-[9px] text-white/70">
