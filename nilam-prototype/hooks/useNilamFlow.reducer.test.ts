@@ -275,6 +275,7 @@ describe("nilamReducer — goBack", () => {
       previewDocs: [],
       agunanKlas: DEFAULT_KLASIFIKASI,
       surveyStatus: "none",
+      analystStatus: "none",
     };
 
     const after = nilamReducer(stateAtProcessing, { type: "goBack" });
@@ -307,6 +308,7 @@ describe("nilamReducer — goBack", () => {
       previewDocs: [],
       agunanKlas: DEFAULT_KLASIFIKASI,
       surveyStatus: "none",
+      analystStatus: "none",
     };
 
     const after = nilamReducer(stateAtAnalyst, { type: "goBack" });
@@ -419,6 +421,7 @@ describe("nilamReducer — reset", () => {
       previewDocs: [],
       agunanKlas: DEFAULT_KLASIFIKASI,
       surveyStatus: "none",
+      analystStatus: "none",
     };
 
     const after = nilamReducer(populated, { type: "reset" });

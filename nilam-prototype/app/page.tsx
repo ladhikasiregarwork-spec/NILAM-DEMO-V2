@@ -38,9 +38,11 @@ export default function Page() {
     setUserInput,
     previewDocs,
     surveyStatus,
+    analystStatus,
     surveyValue,
     surveyNote,
     submitSurvey,
+    submitAnalystDecision,
     submit,
     reset,
   } = useNilamFlow();
@@ -78,6 +80,7 @@ export default function Page() {
           plafonAgunan={plafonAgunan}
           agunan={agunan}
           surveyStatus={surveyStatus}
+          analystStatus={analystStatus}
           surveyNote={surveyNote}
           surveyValue={surveyValue}
           start={start}
@@ -108,6 +111,9 @@ export default function Page() {
           npwLand={npwLand}
           agunanKlas={agunanKlas}
           setAgunanKlas={setAgunanKlas}
+          surveyStatus={surveyStatus}
+          analystStatus={analystStatus}
+          onAnalystDecision={submitAnalystDecision}
         />
       }
       rmMobile={

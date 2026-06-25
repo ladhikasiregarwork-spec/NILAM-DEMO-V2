@@ -25,6 +25,8 @@ interface Breakdown {
   factors: { label: string; points: number; max: number; detail: string }[];
 }
 
+type Decision = "none" | "approved" | "rejected";
+
 interface SummaryDecisionCardProps {
   status: NodeStatus;
   kemampuan: number;
@@ -32,9 +34,11 @@ interface SummaryDecisionCardProps {
   score: number;
   grade: string;
   breakdown: Breakdown;
+  /** Analyst decision (controlled). "none" = awaiting decision. */
+  decision?: Decision;
+  /** Approve/Reject release/deny the offer; "pending" undoes the decision. */
+  onDecision?: (d: "approved" | "rejected" | "pending") => void;
 }
-
-type Decision = "none" | "approved" | "rejected";
 
 function scoreColor(score: number): string {
   if (score >= 80) return "#16A34A";
@@ -60,16 +64,19 @@ function DetailRow({ label, value, strong, accent }: { label: string; value: str
  * di-expand (dropdown) untuk melihat rincian perhitungannya: Plafond Pembiayaan,
  * Total DP, Kemampuan Bayar, Credit Scoring. Lalu tombol keputusan analis.
  */
-export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr, score, grade, breakdown: b }: SummaryDecisionCardProps) {
+export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr, score, grade, breakdown: b, decision = "none", onDecision }: SummaryDecisionCardProps) {
   const ready = status === "success";
-  const [decision, setDecision] = useState<Decision>("none");
   const [open, setOpen] = useState<string | null>(null);
-  // Bonus tahunan editable (default = nilai terbaca OCR); null = belum diedit.
+  // Income components editable (default = nilai terbaca OCR); null = belum diedit.
+  const [gajiEdit, setGajiEdit] = useState<number | null>(null);
+  const [thrEdit, setThrEdit] = useState<number | null>(null);
   const [bonusEdit, setBonusEdit] = useState<number | null>(null);
+  const gajiEff = gajiEdit ?? b.gajiBulanan;
+  const thrEff = thrEdit ?? b.thrTahunan;
   const bonusEff = bonusEdit ?? b.bonusTahunan;
-  const penghasilanEff = penghasilanBulanan(b.gajiBulanan, b.thrTahunan, bonusEff);
+  const penghasilanEff = penghasilanBulanan(gajiEff, thrEff, bonusEff);
   const dirEff = dirRate(penghasilanEff);
-  const kemampuanEff = kemampuanBayar(b.gajiBulanan, b.thrTahunan, bonusEff, b.slikAngsuran);
+  const kemampuanEff = kemampuanBayar(gajiEff, thrEff, bonusEff, b.slikAngsuran);
 
   // Plafond pembiayaan di-cap oleh kebutuhan, agunan (NPW×LTV), DAN kemampuan
   // bayar — jadi saat bonus/kemampuan diedit, plafond & total DP ikut berubah.
@@ -157,13 +164,34 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
             value={formatRupiah(kemampuanEff)}
             valueNote={layak != null && <span className={cn("block text-[7px] font-semibold", layak ? "text-emerald-600" : "text-red-500")}>{layak ? "angsuran KPR layak" : "angsuran KPR melebihi"}</span>}
           >
-            <DetailRow label="Gaji / bulan" value={formatRupiah(b.gajiBulanan)} />
-            {/* THR — full detected amount, contributes /12 (mirrors the Bonus row) */}
+            {/* Gaji — editable */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[8px] text-bri-muted">THR / 12</span>
+              <span className="flex items-center gap-1 text-[8px] text-bri-muted">Gaji / bulan <Pencil size={7} className="text-bri-muted/60" /></span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={gajiEff.toLocaleString("id-ID")}
+                  onChange={(e) => setGajiEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="Gaji bulanan (bisa diedit)"
+                  className="w-[88px] rounded border border-bri-line bg-white px-1 py-0.5 text-right text-[8px] tabular-nums text-bri-ink focus:border-bri-blue focus:outline-none"
+                />
+                <span aria-hidden className="w-3" />
+              </span>
+            </div>
+            {/* THR — editable (full annual, contributes /12) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-[8px] text-bri-muted">THR / 12 <Pencil size={7} className="text-bri-muted/60" /></span>
               <span className="flex items-center gap-1">
                 <span className="text-[8px] text-bri-muted">+</span>
-                <span className="text-[8px] tabular-nums text-bri-ink">{formatRupiah(b.thrTahunan)}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={thrEff.toLocaleString("id-ID")}
+                  onChange={(e) => setThrEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="THR tahunan (bisa diedit)"
+                  className="w-[88px] rounded border border-bri-line bg-white px-1 py-0.5 text-right text-[8px] tabular-nums text-bri-ink focus:border-bri-blue focus:outline-none"
+                />
                 <span className="text-[7px] text-bri-muted">/12</span>
               </span>
             </div>
@@ -227,10 +255,10 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
           {/* Decision */}
           {decision === "none" ? (
             <div className="flex gap-2">
-              <button type="button" onClick={() => setDecision("approved")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-[10px] font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]">
+              <button type="button" onClick={() => onDecision?.("approved")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-[10px] font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]">
                 <CheckCircle2 size={13} /> Approve
               </button>
-              <button type="button" onClick={() => setDecision("rejected")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 py-2 text-[10px] font-semibold text-red-600 transition-all hover:bg-red-100 active:scale-[0.98]">
+              <button type="button" onClick={() => onDecision?.("rejected")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 py-2 text-[10px] font-semibold text-red-600 transition-all hover:bg-red-100 active:scale-[0.98]">
                 <XCircle size={13} /> Reject
               </button>
             </div>
@@ -240,7 +268,7 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
                 {decision === "approved" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                 {decision === "approved" ? "Pengajuan Disetujui" : "Pengajuan Ditolak"}
               </span>
-              <button type="button" onClick={() => setDecision("none")} className="text-[8px] font-semibold text-bri-muted hover:text-bri-blue">Ubah</button>
+              <button type="button" onClick={() => onDecision?.("pending")} className="text-[8px] font-semibold text-bri-muted hover:text-bri-blue">Ubah</button>
             </div>
           )}
         </div>

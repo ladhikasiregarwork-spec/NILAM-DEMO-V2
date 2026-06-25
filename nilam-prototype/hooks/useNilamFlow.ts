@@ -73,11 +73,13 @@ export interface NilamState {
   userInput: UserInput;
   /** Uploaded documents kept for preview (blob URLs + classified type). */
   previewDocs: PreviewDoc[];
-  /** RM survey status (for collateral ≥ SURVEY_THRESHOLD). */
+  /** Collateral Appraisal (CA) survey status. */
   surveyStatus: SurveyStatus;
-  /** Appraised value entered by the RM during the survey (overrides NPW once approved). */
+  /** Credit Analyst decision — gates the customer offer; only relevant once CA approved. */
+  analystStatus: SurveyStatus;
+  /** Appraised value entered by the CA during the survey (overrides NPW once approved). */
   surveyValue?: number;
-  /** RM survey note. */
+  /** CA survey note. */
   surveyNote?: string;
 }
 
@@ -108,7 +110,9 @@ export type NilamAction =
   | { type: "prefillUserInput"; data: Partial<UserInput> }
   | { type: "addPreviewDocs"; docs: PreviewDoc[] }
   | { type: "setSurveyStatus"; status: SurveyStatus }
+  | { type: "setAnalystStatus"; status: SurveyStatus }
   | { type: "submitSurvey"; decision: "approved" | "rejected"; value?: number; note?: string }
+  | { type: "submitAnalystDecision"; decision: "approved" | "rejected" | "pending" }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +135,7 @@ export function initialState(): NilamState {
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
     surveyStatus: "none",
+    analystStatus: "none",
   };
 }
 
@@ -154,6 +159,7 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
     surveyStatus: "none",
+    analystStatus: "none",
   };
 }
 
@@ -255,18 +261,21 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
     case "setSurveyStatus":
       return { ...state, surveyStatus: action.status };
 
+    case "setAnalystStatus":
+      return { ...state, analystStatus: action.status };
+
     case "submitSurvey": {
-      // RM finished the on-site survey. On approval the borrower advances from
-      // the waiting screen to the offer (using the RM's appraised value); on
-      // rejection they stay on the survey step and see the rejection notice.
+      // CA finished the on-site survey. On approval the collateral cards unlock
+      // for the analyst, but the borrower KEEPS WAITING (analyst pending) — the
+      // offer is only released after the Credit Analyst approves. On rejection
+      // they stay on the survey step and see the rejection notice.
       if (action.decision === "approved") {
-        const idx = state.steps.indexOf("offering");
         return {
           ...state,
           surveyStatus: "approved",
+          analystStatus: "pending",
           surveyValue: action.value,
           surveyNote: action.note,
-          stepIndex: idx === -1 ? state.stepIndex : idx,
         };
       }
       return {
@@ -275,6 +284,21 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
         surveyValue: action.value,
         surveyNote: action.note,
       };
+    }
+
+    case "submitAnalystDecision": {
+      // Credit Analyst decided. On approval the borrower advances from the
+      // waiting screen to the offer; on rejection they see the rejection notice;
+      // "pending" (undo) sends them back to the waiting screen.
+      if (action.decision === "approved") {
+        const idx = state.steps.indexOf("offering");
+        return { ...state, analystStatus: "approved", stepIndex: idx === -1 ? state.stepIndex : idx };
+      }
+      if (action.decision === "rejected") {
+        return { ...state, analystStatus: "rejected" };
+      }
+      const sIdx = state.steps.indexOf("survey");
+      return { ...state, analystStatus: "pending", stepIndex: sIdx === -1 ? state.stepIndex : sIdx };
     }
 
     case "setAgunan":
@@ -384,6 +408,7 @@ export function useNilamFlow() {
   const editAgunan = useCallback(() => {
     cancelOrchestrator();
     dispatch({ type: "setSurveyStatus", status: "none" });
+    dispatch({ type: "setAnalystStatus", status: "none" });
     dispatch({ type: "goTo", step: "agunan" });
   }, [cancelOrchestrator]);
 
@@ -705,12 +730,22 @@ export function useNilamFlow() {
     [],
   );
 
+  // Credit Analyst decision (in the dashboard's Ringkasan & Keputusan card).
+  // Approve releases the offer to the borrower; "pending" undoes the decision.
+  const submitAnalystDecision = useCallback(
+    (decision: "approved" | "rejected" | "pending") => {
+      dispatch({ type: "submitAnalystDecision", decision });
+    },
+    [],
+  );
+
   const submit = useCallback(() => {
     // Cancel any in-flight orchestrator before starting a new run.
     cancelOrchestrator();
 
-    // Fresh survey state for this run (a re-submit after "Ganti Agunan").
+    // Fresh survey + analyst state for this run (a re-submit after "Ganti Agunan").
     dispatch({ type: "setSurveyStatus", status: "none" });
+    dispatch({ type: "setAnalystStatus", status: "none" });
 
     // Read the LATEST state from the ref (never a stale closure).
     const s = stateRef.current;
@@ -800,9 +835,11 @@ export function useNilamFlow() {
     setUserInput,
     previewDocs: state.previewDocs,
     surveyStatus: state.surveyStatus,
+    analystStatus: state.analystStatus,
     surveyValue: state.surveyValue,
     surveyNote: state.surveyNote,
     submitSurvey,
+    submitAnalystDecision,
     setNasabahPayroll,
     setPasanganPayroll,
     setJointAnswer,

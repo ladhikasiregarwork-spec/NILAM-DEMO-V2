@@ -50,8 +50,10 @@ interface MobileAppProps {
   /** Collateral plafond cap = NPW × LTV. */
   plafonAgunan?: number;
   agunan?: AgunanData;
-  /** RM survey status (for collateral ≥ Rp500 juta). */
+  /** Collateral Appraisal (CA) survey status. */
   surveyStatus: SurveyStatus;
+  /** Credit Analyst decision — gates the tenor offer after CA approval. */
+  analystStatus: SurveyStatus;
   /** RM survey note (shown on rejection). */
   surveyNote?: string;
   /** RM appraised value. */
@@ -92,6 +94,7 @@ export function MobileApp({
   plafonAgunan,
   agunan,
   surveyStatus,
+  analystStatus,
   surveyNote,
   surveyValue,
   start,
@@ -179,6 +182,7 @@ export function MobileApp({
           <SurveyScreen
             key="survey"
             status={surveyStatus}
+            analystStatus={analystStatus}
             agunan={agunan}
             note={surveyNote}
             surveyValue={surveyValue}
