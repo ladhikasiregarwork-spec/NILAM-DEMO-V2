@@ -1,103 +1,96 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { FlowStep } from "@/types/flow";
+import type { LoanType } from "@/types/auto";
 
 interface FlowStepperProps {
   currentStep: FlowStep;
+  loanType: LoanType | null;
 }
 
 interface StepNode {
-  number: number;
   label: string;
   sublabel?: string;
+  /** Flow steps that map to this node (the first match drives the active index). */
+  steps: FlowStep[];
 }
 
-const NODES: StepNode[] = [
-  { number: 1, label: "Masuk" },
-  { number: 2, label: "S&K" },
-  { number: 3, label: "Upload" },
-  { number: 4, label: "Data", sublabel: "Diri" },
-  { number: 5, label: "Agunan" },
-  { number: 6, label: "Proses" },
-  { number: 7, label: "Penawa-", sublabel: "ran" },
-  { number: 8, label: "Cair" },
+// Base nodes shared by both branches: the customer uploads documents BEFORE
+// choosing a product, so Upload sits ahead of Jenis (loan_type).
+const BASE: StepNode[] = [
+  { label: "Masuk", steps: ["opening"] },
+  { label: "S&K", steps: ["term_condition"] },
+  { label: "Upload", steps: ["requirement"] },
+  { label: "Jenis", steps: ["loan_type"] },
 ];
 
-// Map currentStep → which node index (0-based) is "active".
-function getActiveIndex(step: FlowStep): number {
-  switch (step) {
-    case "opening":         return 0;
-    case "term_condition":  return 1;
-    case "requirement":     return 2;
-    case "data_diri":       return 3;
-    case "agunan":          return 4;
-    case "processing":      return 5;
-    // Survey shares the "Proses" node — from the borrower's progress view the
-    // RM survey is part of the review/processing stage.
-    case "survey":          return 5;
-    case "offering":        return 6;
-    case "disburse":        return 7;
-    default:                return 0;
-  }
+const KPR_NODES: StepNode[] = [
+  ...BASE,
+  { label: "Data", sublabel: "Diri", steps: ["data_diri"] },
+  { label: "Agunan", steps: ["agunan"] },
+  { label: "Proses", steps: ["processing", "survey", "analyst_decision"] },
+  { label: "Penawa-", sublabel: "ran", steps: ["offering"] },
+  { label: "Cair", steps: ["disburse"] },
+];
+
+const AUTO_NODES: StepNode[] = [
+  ...BASE,
+  { label: "Kenda-", sublabel: "raan", steps: ["vehicle_search"] },
+  { label: "Simu-", sublabel: "lasi", steps: ["vehicle_detail"] },
+  { label: "Janji", steps: ["appointment"] },
+  { label: "Selesai", steps: ["appointment_done"] },
+];
+
+function nodesFor(loanType: LoanType | null): StepNode[] {
+  if (loanType === "auto") return AUTO_NODES;
+  if (loanType === "kpr") return KPR_NODES;
+  return BASE;
+}
+
+function activeIndexOf(nodes: StepNode[], step: FlowStep): number {
+  const idx = nodes.findIndex((n) => n.steps.includes(step));
+  return idx === -1 ? 0 : idx;
 }
 
 /**
- * Horizontal flow stepper rendered BELOW the iPhone — SOFIA/BRI theme.
- * 5 numbered circles connected by dotted lines, with tiny labels underneath.
- *
- * Node states:
- *   done   = filled bri-navy, white check icon
- *   active = filled bri-navy, white number (bold) + soft glow ring
- *   future = white bg, bri-line border, bri-muted number
+ * Horizontal flow stepper rendered BELOW the iPhone. The node list adapts to the
+ * chosen product (KPR vs auto/KKB); before a product is picked only the shared
+ * Masuk · S&K · Jenis nodes show.
  */
-export function FlowStepper({ currentStep }: FlowStepperProps) {
-  const activeIdx = getActiveIndex(currentStep);
+export function FlowStepper({ currentStep, loanType }: FlowStepperProps) {
+  const nodes = nodesFor(loanType);
+  const activeIdx = activeIndexOf(nodes, currentStep);
+
+  // Compact sizing so longer branches still fit the 360px phone column.
+  const minW = nodes.length >= 9 ? 30 : nodes.length >= 8 ? 32 : nodes.length >= 7 ? 36 : 42;
+  const connW = nodes.length >= 8 ? 8 : nodes.length >= 7 ? 10 : 16;
 
   return (
     <div className="flex shrink-0 items-start justify-center gap-0">
-      {NODES.map((node, i) => {
-        const isDone   = i < activeIdx;
+      {nodes.map((node, i) => {
+        const isDone = i < activeIdx;
         const isActive = i === activeIdx;
 
         return (
-          <div key={node.number} className="flex items-start">
-            {/* Node + label */}
-            <div className="flex flex-col items-center" style={{ minWidth: 40 }}>
-              {/* Circle */}
+          <div key={node.label + i} className="flex items-start">
+            <div className="flex flex-col items-center" style={{ minWidth: minW }}>
               <div
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-all",
-                  isDone
-                    ? "bg-bri-navy text-white"
-                    : isActive
-                    ? "bg-bri-navy text-white"
-                    : "border-2 border-bri-line bg-white text-bri-muted"
+                  isDone || isActive ? "bg-bri-navy text-white" : "border-2 border-bri-line bg-white text-bri-muted",
                 )}
-                style={
-                  isActive
-                    ? { boxShadow: "0 0 0 3px rgba(0,82,156,0.18)" }
-                    : undefined
-                }
+                style={isActive ? { boxShadow: "0 0 0 3px rgba(0,82,156,0.18)" } : undefined}
               >
-                {isDone ? (
-                  <Check size={12} strokeWidth={3} />
-                ) : (
-                  <span>{node.number}</span>
-                )}
+                {isDone ? <Check size={12} strokeWidth={3} /> : <span>{i + 1}</span>}
               </div>
 
-              {/* Label */}
               <div className="mt-0.5 text-center">
                 <span
                   className={cn(
                     "block text-[8px] leading-tight",
-                    isActive
-                      ? "font-semibold text-bri-navy"
-                      : isDone
-                      ? "font-medium text-bri-blue"
-                      : "text-bri-muted"
+                    isActive ? "font-semibold text-bri-navy" : isDone ? "font-medium text-bri-blue" : "text-bri-muted",
                   )}
-                  style={{ maxWidth: 40 }}
+                  style={{ maxWidth: minW }}
                 >
                   {node.label}
                 </span>
@@ -105,11 +98,7 @@ export function FlowStepper({ currentStep }: FlowStepperProps) {
                   <span
                     className={cn(
                       "block text-[8px] leading-tight",
-                      isActive
-                        ? "font-semibold text-bri-navy"
-                        : isDone
-                        ? "font-medium text-bri-blue"
-                        : "text-bri-muted"
+                      isActive ? "font-semibold text-bri-navy" : isDone ? "font-medium text-bri-blue" : "text-bri-muted",
                     )}
                   >
                     {node.sublabel}
@@ -118,16 +107,13 @@ export function FlowStepper({ currentStep }: FlowStepperProps) {
               </div>
             </div>
 
-            {/* Dotted connector (not after last node) */}
-            {i < NODES.length - 1 && (
+            {i < nodes.length - 1 && (
               <div
-                className="mt-[13px] flex-1"
+                className="mt-[13px]"
                 style={{
-                  width: 16,
+                  width: connW,
                   height: 2,
                   borderTop: `2px dotted ${i < activeIdx ? "#00529C" : "#E5E7EB"}`,
-                  minWidth: 10,
-                  maxWidth: 20,
                 }}
               />
             )}

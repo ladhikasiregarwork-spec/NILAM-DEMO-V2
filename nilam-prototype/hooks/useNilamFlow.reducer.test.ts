@@ -12,7 +12,8 @@ import { DEFAULT_KLASIFIKASI } from "@/data/ltv";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const UNIFORM_STEPS = ["opening", "income_type", "joint_income", "requirement", "processing", "analyst_decision"];
+// Shared base flow before a product is chosen on the loan_type step.
+const BASE_STEPS = ["opening", "term_condition", "requirement", "loan_type"];
 
 function makePersona(nasabahPayroll: boolean, pasanganPayroll: boolean): PersonaConfig {
   return { nasabahPayroll, pasanganPayroll };
@@ -93,9 +94,9 @@ describe("nilamReducer — setNasabahPayroll", () => {
     expect(state.persona.pasanganPayroll).toBe(true);
   });
 
-  it("produces the 6-step uniform flow after setNasabahPayroll", () => {
+  it("resets to the base flow after setNasabahPayroll", () => {
     const state = nilamReducer(initialState(), { type: "setNasabahPayroll", value: false });
-    expect(state.steps).toEqual(UNIFORM_STEPS);
+    expect(state.steps).toEqual(BASE_STEPS);
   });
 });
 
@@ -150,9 +151,9 @@ describe("nilamReducer — setPasanganPayroll", () => {
     expect(state.persona.pasanganPayroll).toBe(true);
   });
 
-  it("produces the 6-step uniform flow after setPasanganPayroll", () => {
+  it("resets to the base flow after setPasanganPayroll", () => {
     const state = nilamReducer(initialState(), { type: "setPasanganPayroll", value: true });
-    expect(state.steps).toEqual(UNIFORM_STEPS);
+    expect(state.steps).toEqual(BASE_STEPS);
   });
 });
 
@@ -213,7 +214,7 @@ describe("nilamReducer — next", () => {
     expect(s2.stepIndex).toBe(2);
   });
 
-  it("clamps at the last step index (analyst_decision, idx=5) — does not go beyond", () => {
+  it("clamps at the last step of the base flow (loan_type) — does not go beyond", () => {
     let state = initialState();
 
     // Advance past the last step many times
@@ -222,7 +223,7 @@ describe("nilamReducer — next", () => {
     }
 
     expect(state.stepIndex).toBe(state.steps.length - 1);
-    expect(state.steps[state.stepIndex]).toBe("analyst_decision");
+    expect(state.steps[state.stepIndex]).toBe("loan_type");
   });
 });
 
@@ -233,7 +234,7 @@ describe("nilamReducer — next", () => {
 describe("nilamReducer — goBack", () => {
   it("decrements stepIndex by 1 from a normal step", () => {
     const s0 = initialState();
-    const s1 = nilamReducer(s0, { type: "next" }); // stepIndex = 1 (income_type)
+    const s1 = nilamReducer(s0, { type: "next" }); // stepIndex = 1 (term_condition)
     const s2 = nilamReducer(s1, { type: "goBack" }); // stepIndex → 0
 
     expect(s2.stepIndex).toBe(0);
@@ -247,7 +248,7 @@ describe("nilamReducer — goBack", () => {
   });
 
   it("does NOT clear events/nasabah/pasangan when leaving a normal step", () => {
-    let state = nilamReducer(initialState(), { type: "next" }); // stepIndex = 1 (income_type)
+    let state = nilamReducer(initialState(), { type: "next" }); // stepIndex = 1 (term_condition)
     state = { ...state, events: [makeEvent()], nasabah: makeIncome("nasabah") };
 
     const after = nilamReducer(state, { type: "goBack" });
@@ -257,10 +258,11 @@ describe("nilamReducer — goBack", () => {
   });
 
   it("clears events, nasabah, pasangan when leaving 'processing' (rollback)", () => {
-    const allSteps = planFlow(DEFAULT_PERSONA);
+    const allSteps = planFlow(DEFAULT_PERSONA, "kpr");
     const processingIdx = allSteps.indexOf("processing");
 
     const stateAtProcessing: NilamState = {
+      ...initialState(),
       persona: DEFAULT_PERSONA,
       steps: allSteps,
       stepIndex: processingIdx,
@@ -269,12 +271,6 @@ describe("nilamReducer — goBack", () => {
       events: [makeEvent(), makeEvent("income")],
       nasabah: makeIncome("nasabah"),
       pasangan: makeIncome("pasangan"),
-      ocr: {},
-      docCounts: {},
-      userInput: {},
-      previewDocs: [],
-      agunanKlas: DEFAULT_KLASIFIKASI,
-      surveyStatus: "none",
     };
 
     const after = nilamReducer(stateAtProcessing, { type: "goBack" });
@@ -289,24 +285,18 @@ describe("nilamReducer — goBack", () => {
   });
 
   it("clears events, nasabah, pasangan when leaving 'analyst_decision' (rollback)", () => {
-    const allSteps = planFlow(DEFAULT_PERSONA);
+    const allSteps = planFlow(DEFAULT_PERSONA, "kpr");
     const analystIdx = allSteps.indexOf("analyst_decision");
+    expect(analystIdx).toBeGreaterThan(-1);
 
     const stateAtAnalyst: NilamState = {
+      ...initialState(),
       persona: DEFAULT_PERSONA,
       steps: allSteps,
       stepIndex: analystIdx,
       jointAnswer: null,
-      uploads: {},
       events: [makeEvent()],
       nasabah: makeIncome("nasabah"),
-      pasangan: undefined,
-      ocr: {},
-      docCounts: {},
-      userInput: {},
-      previewDocs: [],
-      agunanKlas: DEFAULT_KLASIFIKASI,
-      surveyStatus: "none",
     };
 
     const after = nilamReducer(stateAtAnalyst, { type: "goBack" });
@@ -315,6 +305,73 @@ describe("nilamReducer — goBack", () => {
     expect(after.nasabah).toBeUndefined();
     expect(after.pasangan).toBeUndefined();
     expect(after.stepIndex).toBe(analystIdx - 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// submitSurvey → analyst_decision gate, then submitAnalystDecision → offering
+// ---------------------------------------------------------------------------
+
+describe("nilamReducer — analyst decision gate", () => {
+  function stateInKprAt(step: FlowStep): NilamState {
+    const steps = planFlow(DEFAULT_PERSONA, "kpr");
+    return { ...initialState(), persona: DEFAULT_PERSONA, steps, stepIndex: steps.indexOf(step) };
+  }
+
+  it("approving the survey advances to analyst_decision (NOT offering) and sets analystDecision=pending", () => {
+    const before = stateInKprAt("survey");
+    const after = nilamReducer(before, { type: "submitSurvey", decision: "approved", value: 800_000_000 });
+
+    expect(after.steps[after.stepIndex]).toBe("analyst_decision");
+    expect(after.surveyStatus).toBe("approved");
+    expect(after.surveyValue).toBe(800_000_000);
+    expect(after.analystDecision).toBe("pending");
+  });
+
+  it("analyst approval releases the offer (advances to offering) and sets analystDecision=approved", () => {
+    const before = { ...stateInKprAt("analyst_decision"), analystDecision: "pending" as const };
+    const after = nilamReducer(before, { type: "submitAnalystDecision", decision: "approved" });
+
+    expect(after.analystDecision).toBe("approved");
+    expect(after.steps[after.stepIndex]).toBe("offering");
+  });
+
+  it("analyst rejection keeps the customer on analyst_decision (no offer)", () => {
+    const before = { ...stateInKprAt("analyst_decision"), analystDecision: "pending" as const };
+    const after = nilamReducer(before, { type: "submitAnalystDecision", decision: "rejected" });
+
+    expect(after.analystDecision).toBe("rejected");
+    expect(after.steps[after.stepIndex]).toBe("analyst_decision");
+  });
+
+  it("setAnalystDecision resets the decision (used on re-submit / Ganti Agunan)", () => {
+    const before = { ...stateInKprAt("analyst_decision"), analystDecision: "approved" as const };
+    const after = nilamReducer(before, { type: "setAnalystDecision", status: "none" });
+    expect(after.analystDecision).toBe("none");
+  });
+
+  it("submitAnalystDecision is a no-op until the appraisal approves (strict order)", () => {
+    // Appraisal still pending → analyst stage not open yet (analystDecision "none").
+    const before = { ...stateInKprAt("survey"), surveyStatus: "pending" as const };
+    const after = nilamReducer(before, { type: "submitAnalystDecision", decision: "approved" });
+
+    expect(after.analystDecision).toBe("none"); // ignored — appraisal must go first
+    expect(after.steps[after.stepIndex]).toBe("survey"); // stayed put — no offer
+  });
+
+  it("strict order: appraisal approves → analyst stage opens → analyst releases the offer", () => {
+    // 1. Appraisal approves → analyst stage opens (pending); customer waits.
+    const afterSurvey = nilamReducer(
+      { ...stateInKprAt("survey"), surveyStatus: "pending" as const },
+      { type: "submitSurvey", decision: "approved", value: 800_000_000 },
+    );
+    expect(afterSurvey.analystDecision).toBe("pending");
+    expect(afterSurvey.steps[afterSurvey.stepIndex]).toBe("analyst_decision");
+
+    // 2. Only now can the analyst approve → offer released.
+    const afterAnalyst = nilamReducer(afterSurvey, { type: "submitAnalystDecision", decision: "approved" });
+    expect(afterAnalyst.analystDecision).toBe("approved");
+    expect(afterAnalyst.steps[afterAnalyst.stepIndex]).toBe("offering");
   });
 });
 
@@ -403,28 +460,23 @@ describe("nilamReducer — setComponent", () => {
 // ---------------------------------------------------------------------------
 
 describe("nilamReducer — reset", () => {
-  it("returns to initial state: DEFAULT_PERSONA, steps=UNIFORM_STEPS, stepIndex 0", () => {
+  it("returns to initial state: DEFAULT_PERSONA, base steps, stepIndex 0", () => {
     const populated: NilamState = {
+      ...initialState(),
       persona: makePersona(false, true),
-      steps: UNIFORM_STEPS as FlowStep[],
+      steps: BASE_STEPS as FlowStep[],
       stepIndex: 3,
       jointAnswer: "ya",
       uploads: { slip: true, mutasi: true },
       events: [makeEvent(), makeEvent()],
       nasabah: makeIncome("nasabah"),
       pasangan: makeIncome("pasangan"),
-      ocr: {},
-      docCounts: {},
-      userInput: {},
-      previewDocs: [],
-      agunanKlas: DEFAULT_KLASIFIKASI,
-      surveyStatus: "none",
     };
 
     const after = nilamReducer(populated, { type: "reset" });
 
     expect(after.persona).toEqual(DEFAULT_PERSONA);
-    expect(after.steps).toEqual(UNIFORM_STEPS);
+    expect(after.steps).toEqual(planFlow(DEFAULT_PERSONA, null));
     expect(after.stepIndex).toBe(0);
     expect(after.jointAnswer).toBeNull();
     expect(after.uploads).toEqual({});
@@ -447,19 +499,20 @@ describe("nilamReducer — reset", () => {
 
 describe("nilamReducer — goTo", () => {
   it("jumps to the correct step index", () => {
-    const s0 = initialState();
+    // Choose KPR so the flow contains the processing step.
+    const s0 = nilamReducer(initialState(), { type: "setLoanType", loanType: "kpr" });
 
     const after = nilamReducer(s0, { type: "goTo", step: "processing" });
     const expectedIdx = s0.steps.indexOf("processing");
+    expect(expectedIdx).toBeGreaterThan(-1);
     expect(after.stepIndex).toBe(expectedIdx);
   });
 
-  it("jumps to analyst_decision correctly", () => {
-    const s0 = initialState();
+  it("jumps to a later branch step (offering) correctly", () => {
+    const s0 = nilamReducer(initialState(), { type: "setLoanType", loanType: "kpr" });
 
-    const after = nilamReducer(s0, { type: "goTo", step: "analyst_decision" });
-    expect(after.stepIndex).toBe(5);
-    expect(after.steps[after.stepIndex]).toBe("analyst_decision");
+    const after = nilamReducer(s0, { type: "goTo", step: "offering" });
+    expect(after.steps[after.stepIndex]).toBe("offering");
   });
 
   it("is a no-op for an absent step", () => {
@@ -531,8 +584,8 @@ describe("initialState", () => {
     expect(initialState().jointAnswer).toBeNull();
   });
 
-  it("has the 6-step uniform flow", () => {
-    expect(initialState().steps).toEqual(UNIFORM_STEPS);
+  it("has the base flow (before a product is chosen)", () => {
+    expect(initialState().steps).toEqual(BASE_STEPS);
   });
 
   it("stepIndex starts at 0", () => {

@@ -1,6 +1,7 @@
 export type FlowStep =
   | "opening"
   | "term_condition"
+  | "loan_type"
   | "income_type"
   | "joint_income"
   | "requirement"
@@ -10,7 +11,12 @@ export type FlowStep =
   | "survey"
   | "offering"
   | "disburse"
-  | "analyst_decision";
+  | "analyst_decision"
+  // Auto-loan (KKB) branch
+  | "vehicle_search"
+  | "vehicle_detail"
+  | "appointment"
+  | "appointment_done";
 
 export interface PersonaConfig {
   nasabahPayroll: boolean;
@@ -26,6 +32,17 @@ export interface PersonaConfig {
  *   rejected — RM finished the survey & rejected
  */
 export type SurveyStatus = "none" | "pending" | "approved" | "rejected";
+
+/**
+ * Credit-analyst decision (KPR). After collateral appraisal (and after processing
+ * for sub-threshold applications) the application waits for a Credit Analyst to
+ * approve in the dashboard before the offer is released to the customer.
+ *   none     — not yet handed to the analyst (still processing / in appraisal)
+ *   pending  — waiting for the analyst's decision in the dashboard
+ *   approved — analyst approved → offer released to the customer
+ *   rejected — analyst declined
+ */
+export type AnalystDecisionStatus = "none" | "pending" | "approved" | "rejected";
 
 /** Collateral price at/above which an RM survey is required before an offer. */
 export const SURVEY_THRESHOLD = 500_000_000;

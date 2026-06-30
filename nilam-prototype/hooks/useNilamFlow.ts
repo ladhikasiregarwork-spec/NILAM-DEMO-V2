@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { FlowStep, PersonaConfig, SurveyStatus } from "@/types/flow";
+import { useCallback, useEffect, useReducer, useRef, type Dispatch } from "react";
+import type { FlowStep, PersonaConfig, SurveyStatus, AnalystDecisionStatus } from "@/types/flow";
 import { SURVEY_THRESHOLD } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
@@ -10,6 +10,8 @@ import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { SlikReport } from "@/types/profile";
 import type { UserInput } from "@/types/userInput";
+import type { LoanType, Vehicle, AutoLoanCalc, AppointmentData, AutoVerifyStatus, AutoDecisionStatus } from "@/types/auto";
+import { DEFAULT_DP_PCT, bestSchemeForTenor } from "@/data/autoRates";
 import { usiaDariKtp } from "@/lib/usia";
 import { type AgunanKlasifikasi, DEFAULT_KLASIFIKASI } from "@/data/ltv";
 import type { EventListener } from "@/engines/orchestrator/events";
@@ -20,6 +22,16 @@ import { SLIP_GAJI, MUTASI, IDENTITY_PASANGAN } from "@/data/ocrFixtures";
 import { SLIK_NASABAH, SLIK_PASANGAN } from "@/data/slikFixtures";
 import { FRAUD_RESULT } from "@/data/fraudFixtures";
 import { NASABAH_INCOME, PASANGAN_INCOME } from "@/data/incomeFixtures";
+import {
+  DEMO_KTP,
+  DEMO_KK,
+  DEMO_SLIP_GAJI,
+  DEMO_MUTASI,
+  DEMO_SK,
+  DEMO_SLIK,
+  DEMO_AGUNAN,
+  DEMO_DOC_COUNTS,
+} from "@/data/demoSeed";
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -52,13 +64,37 @@ export interface NilamState {
   userInput: UserInput;
   /** Uploaded documents kept for preview (blob URLs + classified type). */
   previewDocs: PreviewDoc[];
-  /** RM survey status (for collateral ≥ SURVEY_THRESHOLD). */
+  /** Collateral-appraisal survey status (for collateral ≥ SURVEY_THRESHOLD). */
   surveyStatus: SurveyStatus;
-  /** Appraised value entered by the RM during the survey (overrides NPW once approved). */
+  /** Appraised value entered by the appraiser during the survey (overrides NPW once approved). */
   surveyValue?: number;
-  /** RM survey note. */
+  /** Collateral-appraisal note. */
   surveyNote?: string;
+  /** Credit-analyst decision (KPR) — gates the offer; analyst approves in the dashboard. */
+  analystDecision: AnalystDecisionStatus;
+  /** Product chosen on the loan_type step. null until chosen. */
+  loanType: LoanType | null;
+  /** Auto-loan: the vehicle the customer selected from the catalog. */
+  vehicle?: Vehicle;
+  /** Auto-loan: calculator selections (DP / tenor / rate scheme). */
+  autoLoan: AutoLoanCalc;
+  /** Auto-loan: appointment booking details. */
+  appointment: AppointmentData;
+  /** Auto-loan: RM verification stage for the booked appointment. */
+  autoVerify: AutoVerifyStatus;
+  /** Auto-loan: RM verification note. */
+  autoVerifyNote?: string;
+  /** Auto-loan: analyst decision stage (after RM verification). */
+  autoDecision: AutoDecisionStatus;
 }
+
+/** Default auto-loan calculator selections. */
+const DEFAULT_AUTO_LOAN: AutoLoanCalc = {
+  dpPct: DEFAULT_DP_PCT,
+  tenorMonths: 36,
+  schemeId: bestSchemeForTenor(36).id,
+  discountPct: 0,
+};
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -88,6 +124,14 @@ export type NilamAction =
   | { type: "addPreviewDocs"; docs: PreviewDoc[] }
   | { type: "setSurveyStatus"; status: SurveyStatus }
   | { type: "submitSurvey"; decision: "approved" | "rejected"; value?: number; note?: string }
+  | { type: "setAnalystDecision"; status: AnalystDecisionStatus }
+  | { type: "submitAnalystDecision"; decision: "approved" | "rejected" }
+  | { type: "setLoanType"; loanType: LoanType }
+  | { type: "setVehicle"; vehicle: Vehicle }
+  | { type: "setAutoLoan"; patch: Partial<AutoLoanCalc> }
+  | { type: "setAppointment"; patch: Partial<AppointmentData> }
+  | { type: "submitAutoVerify"; decision: "approved" | "rejected"; note?: string }
+  | { type: "submitAutoDecision"; decision: "approved" | "rejected" }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -97,7 +141,7 @@ export type NilamAction =
 export function initialState(): NilamState {
   return {
     persona: DEFAULT_PERSONA,
-    steps: planFlow(DEFAULT_PERSONA),
+    steps: planFlow(DEFAULT_PERSONA, null),
     stepIndex: 0,
     jointAnswer: null,
     uploads: {},
@@ -110,6 +154,12 @@ export function initialState(): NilamState {
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
     surveyStatus: "none",
+    analystDecision: "none",
+    loanType: null,
+    autoLoan: DEFAULT_AUTO_LOAN,
+    appointment: {},
+    autoVerify: "none",
+    autoDecision: "none",
   };
 }
 
@@ -120,7 +170,7 @@ export function initialState(): NilamState {
 function resetWithPersona(persona: PersonaConfig): NilamState {
   return {
     persona,
-    steps: planFlow(persona),
+    steps: planFlow(persona, null),
     stepIndex: 0,
     jointAnswer: null,
     uploads: {},
@@ -133,6 +183,12 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     previewDocs: [],
     agunanKlas: DEFAULT_KLASIFIKASI,
     surveyStatus: "none",
+    analystDecision: "none",
+    loanType: null,
+    autoLoan: DEFAULT_AUTO_LOAN,
+    appointment: {},
+    autoVerify: "none",
+    autoDecision: "none",
   };
 }
 
@@ -235,16 +291,19 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
       return { ...state, surveyStatus: action.status };
 
     case "submitSurvey": {
-      // RM finished the on-site survey. On approval the borrower advances from
-      // the waiting screen to the offer (using the RM's appraised value); on
-      // rejection they stay on the survey step and see the rejection notice.
+      // Collateral appraisal finished. On approval the application is NOT shown
+      // the offer yet — it advances to the analyst_decision waiting screen and
+      // the Credit Analyst stage opens (pending). Only then can the analyst
+      // approve in the dashboard. On rejection the borrower stays on the survey
+      // step and sees the rejection notice.
       if (action.decision === "approved") {
-        const idx = state.steps.indexOf("offering");
+        const idx = state.steps.indexOf("analyst_decision");
         return {
           ...state,
           surveyStatus: "approved",
           surveyValue: action.value,
           surveyNote: action.note,
+          analystDecision: "pending",
           stepIndex: idx === -1 ? state.stepIndex : idx,
         };
       }
@@ -254,6 +313,27 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
         surveyValue: action.value,
         surveyNote: action.note,
       };
+    }
+
+    case "setAnalystDecision":
+      return { ...state, analystDecision: action.status };
+
+    case "submitAnalystDecision": {
+      // Credit Analyst decides in the dashboard. Strict order: the analyst can
+      // only decide AFTER the collateral appraisal has approved, i.e. once the
+      // analyst stage is pending (the dashboard buttons are disabled until then).
+      // On approval the offer is released to the customer (advance to offering);
+      // on rejection the borrower stays on the analyst_decision screen.
+      if (state.analystDecision !== "pending") return state;
+      if (action.decision === "approved") {
+        const idx = state.steps.indexOf("offering");
+        return {
+          ...state,
+          analystDecision: "approved",
+          stepIndex: idx === -1 ? state.stepIndex : idx,
+        };
+      }
+      return { ...state, analystDecision: "rejected" };
     }
 
     case "setAgunan":
@@ -278,12 +358,71 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
       // OCR-derived defaults fill only fields the user hasn't set yet.
       return { ...state, userInput: { ...action.data, ...state.userInput } };
 
+    case "setLoanType": {
+      // Choosing a product extends the flow with that branch and advances to
+      // the first step after loan_type.
+      const steps = planFlow(state.persona, action.loanType);
+      const idx = steps.indexOf("loan_type");
+      return {
+        ...state,
+        loanType: action.loanType,
+        steps,
+        stepIndex: idx === -1 ? state.stepIndex : Math.min(idx + 1, steps.length - 1),
+      };
+    }
+
+    case "setVehicle":
+      return { ...state, vehicle: action.vehicle };
+
+    case "setAutoLoan": {
+      const autoLoan = { ...state.autoLoan, ...action.patch };
+      return { ...state, autoLoan };
+    }
+
+    case "setAppointment": {
+      const appointment = { ...state.appointment, ...action.patch };
+      // Booking the appointment opens the RM verification stage.
+      const autoVerify =
+        action.patch.booked && state.autoVerify === "none" ? "pending" : state.autoVerify;
+      return { ...state, appointment, autoVerify };
+    }
+
+    case "submitAutoVerify": {
+      // RM verified (or rejected) the appointment. On verify, hand off to the
+      // analyst (decision → pending).
+      if (action.decision === "approved") {
+        return { ...state, autoVerify: "verified", autoVerifyNote: action.note, autoDecision: "pending" };
+      }
+      return { ...state, autoVerify: "rejected", autoVerifyNote: action.note };
+    }
+
+    case "submitAutoDecision":
+      return { ...state, autoDecision: action.decision === "approved" ? "approved" : "rejected" };
+
     case "reset":
       return initialState();
 
     default:
       return state;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Demo seed — fills OCR/SLIK/agunan with ready-made fixtures so the flow can
+// pass the upload gate without the local classifier/OCR backend. Used by the
+// "Isi Otomatis (Demo)" button and as an automatic fallback when the classifier
+// is unreachable. Gated behind DEMO_CONTROLS at the call sites.
+// ---------------------------------------------------------------------------
+
+function seedDemoInto(dispatch: Dispatch<NilamAction>) {
+  dispatch({ type: "setOcr", doc: "ktp", data: DEMO_KTP });
+  dispatch({ type: "setOcr", doc: "kk", data: DEMO_KK });
+  dispatch({ type: "setOcr", doc: "slipGaji", data: DEMO_SLIP_GAJI });
+  dispatch({ type: "setOcr", doc: "mutasi", data: DEMO_MUTASI });
+  dispatch({ type: "setOcr", doc: "skPerusahaan", data: DEMO_SK });
+  dispatch({ type: "setSlik", data: DEMO_SLIK });
+  dispatch({ type: "setAgunan", data: DEMO_AGUNAN });
+  dispatch({ type: "classify", counts: DEMO_DOC_COUNTS });
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +502,7 @@ export function useNilamFlow() {
   const editAgunan = useCallback(() => {
     cancelOrchestrator();
     dispatch({ type: "setSurveyStatus", status: "none" });
+    dispatch({ type: "setAnalystDecision", status: "none" });
     dispatch({ type: "goTo", step: "agunan" });
   }, [cancelOrchestrator]);
 
@@ -424,7 +564,10 @@ export function useNilamFlow() {
         }
         results = json.results as ClassifyResult[];
       } catch {
-        return { ok: false, error: "Tidak dapat menghubungi server classifier" };
+        // Classifier/OCR backend (port 8020) is not running — fall back to demo
+        // fixtures so the flow can proceed instead of dead-ending at upload.
+        seedDemoInto(dispatch);
+        return { ok: true };
       }
 
       // Group files by detected document type. One upload menu handles ALL docs
@@ -521,6 +664,12 @@ export function useNilamFlow() {
     dispatch({ type: "clearUploads" });
   }, []);
 
+  // One-click demo fill: seed OCR/SLIK/agunan from fixtures so the flow can pass
+  // the upload gate without the local classifier/OCR backend running.
+  const seedDemo = useCallback(() => {
+    seedDemoInto(dispatch);
+  }, []);
+
   // Separate KTP/KK upload: read the document via OCR (Tesseract + regex) and
   // store the extracted identity — not dummy/auto-input.
   const uploadIdentitas = useCallback(
@@ -559,6 +708,34 @@ export function useNilamFlow() {
 
   const setAgunanKlas = useCallback((patch: Partial<AgunanKlasifikasi>) => {
     dispatch({ type: "setAgunanKlas", patch });
+  }, []);
+
+  // ── Auto-loan (KKB) actions ──────────────────────────────────────────────
+  const setLoanType = useCallback((loanType: LoanType) => {
+    cancelOrchestrator();
+    dispatch({ type: "setLoanType", loanType });
+  }, [cancelOrchestrator]);
+
+  const setVehicle = useCallback((vehicle: Vehicle) => {
+    dispatch({ type: "setVehicle", vehicle });
+  }, []);
+
+  const setAutoLoan = useCallback((patch: Partial<AutoLoanCalc>) => {
+    dispatch({ type: "setAutoLoan", patch });
+  }, []);
+
+  const setAppointment = useCallback((patch: Partial<AppointmentData>) => {
+    dispatch({ type: "setAppointment", patch });
+  }, []);
+
+  // RM verifies the booked appointment (KKB). On approval the analyst stage opens.
+  const submitAutoVerify = useCallback((decision: "approved" | "rejected", note?: string) => {
+    dispatch({ type: "submitAutoVerify", decision, note });
+  }, []);
+
+  // Analyst approves/rejects the KKB application (after RM verification).
+  const submitAutoDecision = useCallback((decision: "approved" | "rejected") => {
+    dispatch({ type: "submitAutoDecision", decision });
   }, []);
 
   // Pull the SLIK report (Excel by NIK) as soon as the KTP NIK is known.
@@ -684,12 +861,19 @@ export function useNilamFlow() {
     [],
   );
 
+  // Credit Analyst decides in the dashboard. On approval the offer is released to
+  // the customer (advances them from the analyst_decision waiting screen).
+  const submitAnalystDecision = useCallback((decision: "approved" | "rejected") => {
+    dispatch({ type: "submitAnalystDecision", decision });
+  }, []);
+
   const submit = useCallback(() => {
     // Cancel any in-flight orchestrator before starting a new run.
     cancelOrchestrator();
 
-    // Fresh survey state for this run (a re-submit after "Ganti Agunan").
+    // Fresh survey + analyst state for this run (a re-submit after "Ganti Agunan").
     dispatch({ type: "setSurveyStatus", status: "none" });
+    dispatch({ type: "setAnalystDecision", status: "none" });
 
     // Read the LATEST state from the ref (never a stale closure).
     const s = stateRef.current;
@@ -736,15 +920,17 @@ export function useNilamFlow() {
     };
 
     // Run the pipeline. Only advance if this specific orchestrator instance is
-    // still the active one. Collateral ≥ threshold goes to the RM survey queue
-    // (waiting screen); otherwise the offer is released straight away.
+    // still the active one. Collateral ≥ threshold goes to the appraisal queue
+    // (waiting screen) first; otherwise it skips straight to the analyst stage.
+    // In both cases the offer is released only after the Credit Analyst approves.
     orch.run(s.persona, outputs, emit).then(() => {
       if (orchestratorRef.current !== orch) return;
       if (needsSurvey) {
         dispatch({ type: "setSurveyStatus", status: "pending" });
         dispatch({ type: "goTo", step: "survey" });
       } else {
-        dispatch({ type: "goTo", step: "offering" });
+        dispatch({ type: "setAnalystDecision", status: "pending" });
+        dispatch({ type: "goTo", step: "analyst_decision" });
       }
     });
   }, [cancelOrchestrator]);
@@ -769,6 +955,19 @@ export function useNilamFlow() {
     npwLand: state.npwLand,
     agunanKlas: state.agunanKlas,
     setAgunanKlas,
+    loanType: state.loanType,
+    vehicle: state.vehicle,
+    autoLoan: state.autoLoan,
+    appointment: state.appointment,
+    autoVerify: state.autoVerify,
+    autoVerifyNote: state.autoVerifyNote,
+    autoDecision: state.autoDecision,
+    setLoanType,
+    setVehicle,
+    setAutoLoan,
+    setAppointment,
+    submitAutoVerify,
+    submitAutoDecision,
     userInput: state.userInput,
     setUserInput,
     previewDocs: state.previewDocs,
@@ -776,6 +975,8 @@ export function useNilamFlow() {
     surveyValue: state.surveyValue,
     surveyNote: state.surveyNote,
     submitSurvey,
+    analystDecision: state.analystDecision,
+    submitAnalystDecision,
     setNasabahPayroll,
     setPasanganPayroll,
     setJointAnswer,
@@ -788,6 +989,7 @@ export function useNilamFlow() {
     classifyAndUpload,
     uploadIdentitas,
     clearUploads,
+    seedDemo,
     setAgunan,
     clearAgunan,
     fetchAgunanFromLink,

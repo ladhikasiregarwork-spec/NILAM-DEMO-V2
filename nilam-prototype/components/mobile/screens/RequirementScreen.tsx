@@ -12,9 +12,11 @@ import {
   Loader2,
   UploadCloud,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DOCUMENTS } from "@/data/documents";
+import { DEMO_CONTROLS } from "@/lib/demo";
 import type { DocumentId } from "@/types/documents";
 import type { ClassifyResult } from "@/types/ocrExtract";
 
@@ -25,6 +27,8 @@ interface RequirementScreenProps {
     files: File[],
   ) => Promise<{ ok: boolean; results?: ClassifyResult[]; error?: string }>;
   clearUploads: () => void;
+  /** Demo-only: fill all documents with fixture data (no backend needed). */
+  onSeedDemo?: () => void;
   onSubmit: () => void;
   validating: boolean;
   onGoBack?: () => void;
@@ -49,6 +53,7 @@ export function RequirementScreen({
   docCounts,
   classifyAndUpload,
   clearUploads,
+  onSeedDemo,
   onSubmit,
   validating,
   onGoBack,
@@ -122,6 +127,20 @@ export function RequirementScreen({
         <p className="mt-1 flex items-center gap-1 text-[8.5px] font-medium text-red-500">
           <AlertTriangle size={10} /> {error}
         </p>
+      )}
+
+      {/* Demo-only: skip the OCR backend and fill every document with sample data. */}
+      {DEMO_CONTROLS && onSeedDemo && (
+        <button
+          type="button"
+          onClick={() => {
+            setError(undefined);
+            onSeedDemo();
+          }}
+          className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg border border-bri-blue/30 bg-bri-blue/5 py-1.5 text-[9px] font-semibold text-bri-blue transition-colors hover:bg-bri-blue/10"
+        >
+          <Sparkles size={11} /> Isi Otomatis (Demo) — tanpa upload
+        </button>
       )}
 
       {/* Checklist */}

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { ClipboardList } from "lucide-react";
 import { AppHeader } from "./AppHeader";
-import { AppFooter } from "./AppFooter";
 
 interface AppShellProps {
   /** Phone-frame UI rendered in the left "Mobile App" canvas (nasabah). */
@@ -23,7 +22,6 @@ const MAX_W = "max-w-[1820px]";
  *   1. Centered title block
  *   2. Two identical phone canvases (Nasabah + Relationship Manager), side by side
  *   3. The analyst dashboard ("Behind The Scene") — full-width below the phones, large
- *   4. Centered System Status footer
  */
 export function AppShell({ mobile, rmMobile, dashboard }: AppShellProps) {
   return (
@@ -53,11 +51,6 @@ export function AppShell({ mobile, rmMobile, dashboard }: AppShellProps) {
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">{dashboard}</div>
-      </div>
-
-      {/* ── 4. System Status footer ────────────────────────────────────── */}
-      <div className={`mt-6 w-full ${MAX_W}`}>
-        <AppFooter />
       </div>
     </main>
   );

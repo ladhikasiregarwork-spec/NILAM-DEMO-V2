@@ -7,6 +7,7 @@ import { formatRupiah } from "@/lib/formatRupiah";
 import { penghasilanBulanan, dirRate, kemampuanBayar } from "@/lib/kemampuan";
 import { maxPlafond } from "@/lib/kpr";
 import type { NodeStatus } from "@/types/orchestration";
+import type { AnalystDecisionStatus } from "@/types/flow";
 
 const KPR_RATE = 0.105; // indikatif untuk batas kemampuan
 
@@ -32,6 +33,14 @@ interface SummaryDecisionCardProps {
   score: number;
   grade: string;
   breakdown: Breakdown;
+  /**
+   * Flow-driven analyst decision (KPR). When provided, the Approve/Reject buttons
+   * drive the customer flow: Approve releases the offer; the buttons are only
+   * active once the application reaches the analyst stage (decision === "pending").
+   * Omit for a standalone/cosmetic card (falls back to local state).
+   */
+  decision?: AnalystDecisionStatus;
+  onDecide?: (decision: "approved" | "rejected") => void;
 }
 
 type Decision = "none" | "approved" | "rejected";
@@ -60,9 +69,13 @@ function DetailRow({ label, value, strong, accent }: { label: string; value: str
  * di-expand (dropdown) untuk melihat rincian perhitungannya: Plafond Pembiayaan,
  * Total DP, Kemampuan Bayar, Credit Scoring. Lalu tombol keputusan analis.
  */
-export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr, score, grade, breakdown: b }: SummaryDecisionCardProps) {
+export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr, score, grade, breakdown: b, decision, onDecide }: SummaryDecisionCardProps) {
   const ready = status === "success";
-  const [decision, setDecision] = useState<Decision>("none");
+  // Flow-driven when onDecide is supplied; otherwise fall back to local state.
+  const flowDriven = !!onDecide;
+  const [localDecision, setLocalDecision] = useState<Decision>("none");
+  const eff: AnalystDecisionStatus = flowDriven ? decision ?? "none" : localDecision;
+  const decide = (d: "approved" | "rejected") => (flowDriven ? onDecide!(d) : setLocalDecision(d));
   const [open, setOpen] = useState<string | null>(null);
   // Bonus tahunan editable (default = nilai terbaca OCR); null = belum diedit.
   const [bonusEdit, setBonusEdit] = useState<number | null>(null);
@@ -109,6 +122,62 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
       </div>
     );
   }
+
+  // Analyst decision control (rendered at the bottom of the card). Buttons stay
+  // visible but disabled until the collateral appraisal approves (eff === "pending").
+  const decisionBlock =
+    eff === "none" || eff === "pending" ? (
+      (() => {
+        // Strict order: enabled only once the appraisal cleared (pending).
+        // For the standalone/cosmetic card (no onDecide) keep them enabled.
+        const locked = flowDriven && eff !== "pending";
+        return (
+          <div className="flex flex-col gap-1">
+            {flowDriven && (
+              <p className={cn("text-center text-[8px] font-medium", locked ? "text-bri-muted" : "text-amber-600")}>
+                {locked
+                  ? "Menunggu persetujuan penilaian agunan (collateral appraisal) terlebih dahulu…"
+                  : "Keputusan Credit Analyst — penawaran terbit ke nasabah setelah disetujui."}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => !locked && decide("approved")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-[10px] font-semibold text-white transition-all",
+                  locked ? "cursor-not-allowed opacity-40" : "hover:opacity-90 active:scale-[0.98]",
+                )}
+              >
+                <CheckCircle2 size={13} /> Approve
+              </button>
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => !locked && decide("rejected")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 py-2 text-[10px] font-semibold text-red-600 transition-all",
+                  locked ? "cursor-not-allowed opacity-40" : "hover:bg-red-100 active:scale-[0.98]",
+                )}
+              >
+                <XCircle size={13} /> Reject
+              </button>
+            </div>
+          </div>
+        );
+      })()
+    ) : (
+      <div className={cn("flex items-center justify-between gap-2 rounded-lg border px-3 py-2", eff === "approved" ? "border-emerald-200 bg-emerald-50/60" : "border-red-200 bg-red-50/60")}>
+        <span className={cn("flex items-center gap-1.5 text-[11px] font-bold", eff === "approved" ? "text-emerald-700" : "text-red-600")}>
+          {eff === "approved" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+          {eff === "approved" ? "Pengajuan Disetujui — penawaran diteruskan" : "Pengajuan Ditolak"}
+        </span>
+        {!flowDriven && (
+          <button type="button" onClick={() => setLocalDecision("none")} className="text-[8px] font-semibold text-bri-muted hover:text-bri-blue">Ubah</button>
+        )}
+      </div>
+    );
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-bri-line bg-white px-3 py-2.5 shadow-soft">
@@ -216,25 +285,8 @@ export function SummaryDecisionCard({ status, kemampuan: _kemampuan, angsuranKpr
 
           <div className="flex-1" />
 
-          {/* Decision */}
-          {decision === "none" ? (
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setDecision("approved")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-[10px] font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]">
-                <CheckCircle2 size={13} /> Approve
-              </button>
-              <button type="button" onClick={() => setDecision("rejected")} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 py-2 text-[10px] font-semibold text-red-600 transition-all hover:bg-red-100 active:scale-[0.98]">
-                <XCircle size={13} /> Reject
-              </button>
-            </div>
-          ) : (
-            <div className={cn("flex items-center justify-between gap-2 rounded-lg border px-3 py-2", decision === "approved" ? "border-emerald-200 bg-emerald-50/60" : "border-red-200 bg-red-50/60")}>
-              <span className={cn("flex items-center gap-1.5 text-[11px] font-bold", decision === "approved" ? "text-emerald-700" : "text-red-600")}>
-                {decision === "approved" ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                {decision === "approved" ? "Pengajuan Disetujui" : "Pengajuan Ditolak"}
-              </span>
-              <button type="button" onClick={() => setDecision("none")} className="text-[8px] font-semibold text-bri-muted hover:text-bri-blue">Ubah</button>
-            </div>
-          )}
+          {/* Analyst decision */}
+          {decisionBlock}
         </div>
       )}
     </div>

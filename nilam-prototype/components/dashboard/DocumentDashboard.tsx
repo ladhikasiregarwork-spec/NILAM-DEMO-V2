@@ -10,6 +10,7 @@ import type { EmploymentAgreement, SlikReport } from "@/types/profile";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { UserInput } from "@/types/userInput";
+import type { AnalystDecisionStatus } from "@/types/flow";
 import { ltvFromKlas, type AgunanKlasifikasi } from "@/data/ltv";
 import { computeCreditScore } from "@/engines/scoring/creditScore";
 import { anuitas } from "@/lib/kpr";
@@ -61,6 +62,10 @@ interface DocumentDashboardProps {
   /** Collateral classification (shared) + setter. */
   agunanKlas: AgunanKlasifikasi;
   setAgunanKlas: (patch: Partial<AgunanKlasifikasi>) => void;
+  /** Credit-analyst decision stage (gates the customer's offer). */
+  analystDecision: AnalystDecisionStatus;
+  /** Analyst approves/rejects in the dashboard → releases / declines the offer. */
+  onAnalystDecision: (decision: "approved" | "rejected") => void;
 }
 
 /**
@@ -71,7 +76,7 @@ interface DocumentDashboardProps {
  *   SLIK (2 tab) | AGUNAN (2 tab) | RINGKASAN & KEPUTUSAN (approve/reject)
  *   PREVIEW DOKUMEN                                       (full width)
  */
-export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas }: DocumentDashboardProps) {
+export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas, analystDecision, onAnalystDecision }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
   const [tab, setTab] = useState<BigTab>("summary");
 
@@ -231,6 +236,8 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
               angsuranKpr={kprAngsuran}
               score={creditResult.score}
               grade={creditResult.grade}
+              decision={analystDecision}
+              onDecide={onAnalystDecision}
               breakdown={{
                 harga: hargaRumah,
                 dpAwal,

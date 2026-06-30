@@ -3,7 +3,9 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { MobileApp } from "@/components/mobile/MobileApp";
 import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
+import { AutoLoanDashboard } from "@/components/dashboard/AutoLoanDashboard";
 import { RmMobileApp } from "@/components/rm/RmMobileApp";
+import { RmAutoApp } from "@/components/rm/RmAutoApp";
 import { useNilamFlow } from "@/hooks/useNilamFlow";
 import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
 import { ltvFromKlas } from "@/data/ltv";
@@ -26,6 +28,7 @@ export default function Page() {
     editAgunan,
     classifyAndUpload,
     clearUploads,
+    seedDemo,
     fetchAgunanFromLink,
     setAgunan,
     clearAgunan,
@@ -34,6 +37,19 @@ export default function Page() {
     npwLand,
     agunanKlas,
     setAgunanKlas,
+    loanType,
+    vehicle,
+    autoLoan,
+    appointment,
+    autoVerify,
+    autoVerifyNote,
+    autoDecision,
+    setLoanType,
+    setVehicle,
+    setAutoLoan,
+    setAppointment,
+    submitAutoVerify,
+    submitAutoDecision,
     userInput,
     setUserInput,
     previewDocs,
@@ -41,6 +57,8 @@ export default function Page() {
     surveyValue,
     surveyNote,
     submitSurvey,
+    analystDecision,
+    submitAnalystDecision,
     submit,
     reset,
   } = useNilamFlow();
@@ -80,12 +98,25 @@ export default function Page() {
           surveyStatus={surveyStatus}
           surveyNote={surveyNote}
           surveyValue={surveyValue}
+          analystDecision={analystDecision}
+          loanType={loanType}
+          setLoanType={setLoanType}
+          vehicle={vehicle}
+          setVehicle={setVehicle}
+          autoLoan={autoLoan}
+          setAutoLoan={setAutoLoan}
+          appointment={appointment}
+          setAppointment={setAppointment}
+          autoVerify={autoVerify}
+          autoDecision={autoDecision}
+          autoVerifyNote={autoVerifyNote}
           start={start}
           editAgunan={editAgunan}
           next={next}
           goBack={goBack}
           classifyAndUpload={classifyAndUpload}
           clearUploads={clearUploads}
+          seedDemo={seedDemo}
           fetchAgunanFromLink={fetchAgunanFromLink}
           setAgunan={setAgunan}
           clearAgunan={clearAgunan}
@@ -95,28 +126,59 @@ export default function Page() {
         />
       }
       dashboard={
-        <DocumentDashboard
-          events={events}
-          uploads={uploads}
-          ocr={ocr}
-          docCounts={docCounts}
-          agunan={agunan}
-          slik={slik}
-          userInput={userInput}
-          previewDocs={previewDocs}
-          npw={npw}
-          npwLand={npwLand}
-          agunanKlas={agunanKlas}
-          setAgunanKlas={setAgunanKlas}
-        />
+        loanType === "auto" ? (
+          <AutoLoanDashboard
+            currentStep={currentStep}
+            vehicle={vehicle}
+            calc={autoLoan}
+            appointment={appointment}
+            autoVerify={autoVerify}
+            autoDecision={autoDecision}
+            onDecision={submitAutoDecision}
+            uploads={uploads}
+            ocr={ocr}
+            slik={slik}
+            userInput={userInput}
+            previewDocs={previewDocs}
+          />
+        ) : (
+          <DocumentDashboard
+            events={events}
+            uploads={uploads}
+            ocr={ocr}
+            docCounts={docCounts}
+            agunan={agunan}
+            slik={slik}
+            userInput={userInput}
+            previewDocs={previewDocs}
+            npw={npw}
+            npwLand={npwLand}
+            agunanKlas={agunanKlas}
+            setAgunanKlas={setAgunanKlas}
+            analystDecision={analystDecision}
+            onAnalystDecision={submitAnalystDecision}
+          />
+        )
       }
       rmMobile={
-        <RmMobileApp
-          live={{ nama: userInput?.nama, agunan, npw, npwLand, surveyStatus, surveyValue, surveyNote }}
-          agunanKlas={agunanKlas}
-          setAgunanKlas={setAgunanKlas}
-          onSubmitSurvey={submitSurvey}
-        />
+        loanType === "auto" ? (
+          <RmAutoApp
+            vehicle={vehicle}
+            calc={autoLoan}
+            appointment={appointment}
+            autoVerify={autoVerify}
+            autoVerifyNote={autoVerifyNote}
+            onSubmitVerify={submitAutoVerify}
+            setAutoLoan={setAutoLoan}
+          />
+        ) : (
+          <RmMobileApp
+            live={{ nama: userInput?.nama, agunan, npw, npwLand, surveyStatus, surveyValue, surveyNote }}
+            agunanKlas={agunanKlas}
+            setAgunanKlas={setAgunanKlas}
+            onSubmitSurvey={submitSurvey}
+          />
+        )
       }
     />
   );

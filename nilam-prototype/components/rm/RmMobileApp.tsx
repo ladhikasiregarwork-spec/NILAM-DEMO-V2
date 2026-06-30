@@ -86,8 +86,8 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
       <div className="flex shrink-0 items-center gap-2 border-b border-bri-line bg-bri-navy px-3 py-2 text-white">
         <span className="flex h-5 w-5 items-center justify-center rounded bg-white/15"><UserCheck size={12} /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold leading-tight">Relationship Manager</p>
-          <p className="text-[8px] text-white/70">Survey Agunan · NILAM</p>
+          <p className="text-[11px] font-bold leading-tight">Collateral Appraisal</p>
+          <p className="text-[8px] text-white/70">Penilaian Agunan · NILAM</p>
         </div>
         {active && decided === "none" && (
           <span className="rounded-pill bg-amber-400/20 px-2 py-0.5 text-[8px] font-semibold text-amber-100">perlu survey</span>
@@ -276,7 +276,7 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
                 </div>
                 {live?.surveyNote && <p className="mt-0.5 text-[8.5px] text-bri-muted">“{live.surveyNote}”</p>}
                 <p className="mt-1 text-[8px] text-bri-muted">
-                  {decided === "approved" ? "Penawaran diteruskan ke nasabah." : "Nasabah menerima pemberitahuan penolakan."}
+                  {decided === "approved" ? "Diteruskan ke Credit Analyst untuk keputusan akhir." : "Nasabah menerima pemberitahuan penolakan."}
                 </p>
               </div>
             )}
@@ -289,7 +289,7 @@ export function RmMobileApp({ live, agunanKlas, setAgunanKlas, onSubmitSurvey }:
       <div className="flex h-[60px] shrink-0 flex-col items-center justify-center border-t border-bri-line bg-white px-3">
         <span className="flex items-center gap-1.5 text-bri-muted">
           <UserCheck size={13} />
-          <span className="text-[9px] font-medium">Survey Agunan · Relationship Manager</span>
+          <span className="text-[9px] font-medium">Penilaian Agunan · Collateral Appraisal</span>
         </span>
       </div>
     </div>
