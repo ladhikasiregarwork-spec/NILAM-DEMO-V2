@@ -104,13 +104,12 @@ export const DEMO_SLIK: SlikReport = {
   nik: NIK_NASABAH,
   namaDebitur: NAMA_NASABAH,
   loans: [
-    { jenis: "KPR",          lembaga: "Bank BRI",    plafon: 250_000_000, baki: 120_000_000, angsuran: 2_500_000, status: "Lancar", kualitas: 1, sukuBunga: 8.25, tanggalMulai: "20210301", tanggalJatuhTempo: "20360301", aktif: true },
-    { jenis: "KKB",          lembaga: "BRI Finance", plafon: 180_000_000, baki: 30_000_000,  angsuran: 1_000_000, status: "Lancar", kualitas: 1, sukuBunga: 6.50, tanggalMulai: "20220601", tanggalJatuhTempo: "20270601", aktif: true },
-    { jenis: "Kartu Kredit", lembaga: "Bank BRI",    plafon: 25_000_000,  baki: 0,           angsuran: 0,         status: "Lancar", kualitas: 1, sukuBunga: 26.0, tanggalMulai: "20190815", tanggalJatuhTempo: "20990101", aktif: true },
+    { jenis: "Kartu Kredit", lembaga: "Bank Central Asia",    plafon: 6_000_000,   baki: 0,           angsuran: 0,         status: "Lunas",  kualitas: 1, sukuBunga: 21.0, tanggalMulai: "20230510", tanggalJatuhTempo: "20270430", aktif: false },
+    { jenis: "Multiguna",    lembaga: "Bank Rakyat Indonesia", plafon: 259_000_000, baki: 235_880_725, angsuran: 2_991_575, status: "Lancar", kualitas: 1, sukuBunga: 8.25, tanggalMulai: "20241003", tanggalJatuhTempo: "20351003", aktif: true },
   ],
-  totalAngsuran: 3_500_000,
+  totalAngsuran: 2_991_575,
   kolekTerburuk: 1,
-  totalFasilitas: 3,
+  totalFasilitas: 2,
 };
 
 /** Collateral under the Rp500jt survey threshold → flow goes straight to offer. */

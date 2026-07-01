@@ -1,7 +1,5 @@
 export const runtime = "nodejs";
 
-const NOMINATIM_UA = "NILAM-KPR/1.0 (at.gondrol@gmail.com)";
-
 export interface GeocodeResult {
   /** Display label, e.g. "Dealer BRI Fatmawati, Jakarta Selatan". */
   label: string;
@@ -12,13 +10,12 @@ export interface GeocodeResult {
 /**
  * GET /api/geocode
  *
- * Proxies OpenStreetMap/Nominatim so the appointment screen can pick a meeting
- * point without a Google Maps key. Two modes:
+ * Proxies the Google Geocoding API so the appointment screen can pick a
+ * meeting point. Two modes:
  *   ?q=<text>            forward search → up to 6 matching places (Indonesia)
  *   ?lat=<n>&lon=<n>     reverse geocode → the single place at that point
  *
- * Proxied server-side (rather than called from the browser) to keep a stable
- * User-Agent per the Nominatim usage policy and avoid CORS surprises.
+ * Proxied server-side to keep GOOGLE_MAPS_API_KEY off the client.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -26,19 +23,29 @@ export async function GET(req: Request) {
   const lat = searchParams.get("lat");
   const lon = searchParams.get("lon");
 
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return Response.json(
+      { ok: false, error: "GOOGLE_MAPS_API_KEY belum diset di .env.local" },
+      { status: 500 },
+    );
+  }
+
   // Reverse geocode (e.g. "use my current location").
   if (lat && lon) {
-    const nu = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&addressdetails=1&accept-language=id`;
+    const gu = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(lat)},${encodeURIComponent(lon)}&language=id&region=id&key=${apiKey}`;
     try {
-      const r = await fetch(nu, { headers: { "User-Agent": NOMINATIM_UA } });
-      if (!r.ok) {
-        return Response.json({ ok: false, error: `Gagal membaca lokasi (${r.status})` }, { status: 502 });
-      }
-      const j: any = await r.json();
-      if (!j?.display_name) {
+      const r = await fetch(gu);
+      const j: any = await r.json().catch(() => null);
+      if (!r.ok || !j || j.status !== "OK" || !j.results?.length) {
         return Response.json({ ok: false, error: "Lokasi tidak ditemukan" }, { status: 404 });
       }
-      const result: GeocodeResult = { label: j.display_name, lat: Number(j.lat), lon: Number(j.lon) };
+      const first = j.results[0];
+      const result: GeocodeResult = {
+        label: first.formatted_address,
+        lat: first.geometry.location.lat,
+        lon: first.geometry.location.lng,
+      };
       return Response.json({ ok: true, results: [result] });
     } catch {
       return Response.json({ ok: false, error: "Tidak dapat menghubungi server lokasi" }, { status: 502 });
@@ -49,16 +56,21 @@ export async function GET(req: Request) {
   if (!q) {
     return Response.json({ ok: false, error: "Kata kunci lokasi kosong" }, { status: 400 });
   }
-  const nu = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&addressdetails=1&limit=6&countrycodes=id&accept-language=id`;
+  const gu = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&language=id&region=id&components=country:ID&key=${apiKey}`;
   try {
-    const r = await fetch(nu, { headers: { "User-Agent": NOMINATIM_UA } });
-    if (!r.ok) {
-      return Response.json({ ok: false, error: `Gagal mencari lokasi (${r.status})` }, { status: 502 });
+    const r = await fetch(gu);
+    const j: any = await r.json().catch(() => null);
+    if (!r.ok || !j || (j.status !== "OK" && j.status !== "ZERO_RESULTS")) {
+      return Response.json({ ok: false, error: `Gagal mencari lokasi (${j?.status ?? r.status})` }, { status: 502 });
     }
-    const j: any[] = await r.json();
-    const results: GeocodeResult[] = (j ?? [])
-      .map((it) => ({ label: it.display_name as string, lat: Number(it.lat), lon: Number(it.lon) }))
-      .filter((it) => it.label && Number.isFinite(it.lat) && Number.isFinite(it.lon));
+    const results: GeocodeResult[] = (j.results ?? [])
+      .slice(0, 6)
+      .map((it: any) => ({
+        label: it.formatted_address as string,
+        lat: it.geometry.location.lat as number,
+        lon: it.geometry.location.lng as number,
+      }))
+      .filter((it: GeocodeResult) => it.label && Number.isFinite(it.lat) && Number.isFinite(it.lon));
     return Response.json({ ok: true, results });
   } catch {
     return Response.json({ ok: false, error: "Tidak dapat menghubungi server lokasi" }, { status: 502 });

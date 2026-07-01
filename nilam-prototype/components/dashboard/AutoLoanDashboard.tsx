@@ -18,12 +18,14 @@ import {
   Calculator,
   AlertTriangle,
   Headset,
+  ChevronDown,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah, formatJuta } from "@/lib/formatRupiah";
 import { anuitas } from "@/lib/kpr";
 import { computeAutoLoan } from "@/lib/autoLoan";
-import { computeCreditScore } from "@/engines/scoring/creditScore";
+import { computeCreditScore, type CreditScoreResult } from "@/engines/scoring/creditScore";
 import { usiaDariKtp } from "@/lib/usia";
 import { schemeById } from "@/data/autoRates";
 import { assignRm } from "@/data/relationshipManagers";
@@ -44,7 +46,6 @@ import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
 import { MatchingCard } from "./MatchingCard";
 import { SlikOjkCard } from "./SlikOjkCard";
-import { CreditScoringCard } from "./CreditScoringCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 
 const BIG_TABS = [
@@ -307,14 +308,9 @@ export function AutoLoanDashboard({
             </div>
           </div>
 
-          {/* SLIK Ringkasan | CREDIT SCORING */}
-          <div className="grid grid-cols-2 items-start gap-3">
+          {/* SLIK Ringkasan | STRUKTUR KREDIT KENDARAAN | RINGKASAN & KEPUTUSAN */}
+          <div className="grid grid-cols-3 items-start gap-3">
             <SlikOjkCard status={docStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="summary" />
-            <CreditScoringCard status={docStatus} result={creditResult} />
-          </div>
-
-          {/* STRUKTUR KREDIT KENDARAAN | RINGKASAN & KEPUTUSAN */}
-          <div className="grid grid-cols-2 items-start gap-3">
             <VehicleStructureCard vehicle={vehicle} calc={calc} loan={loan} />
             <AutoDecisionCard
               currentStep={currentStep}
@@ -322,7 +318,7 @@ export function AutoLoanDashboard({
               autoVerify={autoVerify}
               autoDecision={autoDecision}
               onDecision={onDecision}
-              score={score}
+              creditResult={creditResult}
               verdict={verdict}
               angsuran={loan?.angsuran}
               kemampuan={kemampuanBayar(income.gajiBulanan, income.thrTahunan, income.bonusTahunan, slikTotalAngsuran)}
@@ -379,12 +375,18 @@ function AutoCapacityCard({
   tenorMonths: number;
 }) {
   const ready = status === "success";
+  // Editable income components — default to the OCR-read values (null = not yet
+  // edited, so they track the OCR value even if it loads after mount).
+  const [gajiEdit, setGajiEdit] = useState<number | null>(null);
+  const [thrEdit, setThrEdit] = useState<number | null>(null);
   const [bonusEdit, setBonusEdit] = useState<number | null>(null);
+  const gaji = gajiEdit ?? gajiBulanan;
+  const thr = thrEdit ?? thrTahunan;
   const bonus = bonusEdit ?? bonusTahunan;
 
-  const penghasilan = penghasilanBulanan(gajiBulanan, thrTahunan, bonus);
+  const penghasilan = penghasilanBulanan(gaji, thr, bonus);
   const dir = dirRate(penghasilan);
-  const kemampuan = kemampuanBayar(gajiBulanan, thrTahunan, bonus, slikAngsuran);
+  const kemampuan = kemampuanBayar(gaji, thr, bonus, slikAngsuran);
   const layak = angsuran != null ? angsuran <= kemampuan : undefined;
 
   return (
@@ -416,10 +418,46 @@ function AutoCapacityCard({
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-            <CapRow label="Gaji / bulan" value={formatRupiah(gajiBulanan)} />
-            <CapRow label="THR / 12" value={`+ ${formatRupiah(Math.round(thrTahunan / 12))}`} />
+            {/* Gaji — editable */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[9px] text-white/70">Bonus / 12</span>
+              <span className="flex items-center gap-1 text-[9px] text-white/70">
+                Gaji / bulan <Pencil size={8} className="text-white/50" />
+              </span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={gaji.toLocaleString("id-ID")}
+                  onChange={(e) => setGajiEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="Gaji bulanan (bisa diedit)"
+                  className="w-[96px] rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-right text-[9px] font-medium text-white tabular-nums focus:border-white focus:outline-none"
+                />
+                <span aria-hidden className="w-3.5" />
+              </span>
+            </div>
+            {/* THR — editable (full annual, contributes /12) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-[9px] text-white/70">
+                THR / 12 <Pencil size={8} className="text-white/50" />
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-[10px] text-white/90">+</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={thr.toLocaleString("id-ID")}
+                  onChange={(e) => setThrEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="THR tahunan (bisa diedit)"
+                  className="w-[96px] rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-right text-[9px] font-medium text-white tabular-nums focus:border-white focus:outline-none"
+                />
+                <span className="text-[8px] text-white/50">/12</span>
+              </span>
+            </div>
+            {/* Bonus — editable */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-[9px] text-white/70">
+                Bonus / 12 <Pencil size={8} className="text-white/50" />
+              </span>
               <span className="flex items-center gap-1">
                 <span className="text-[10px] text-white/90">+</span>
                 <input
@@ -501,7 +539,7 @@ function AutoDecisionCard({
   autoVerify,
   autoDecision,
   onDecision,
-  score,
+  creditResult,
   verdict,
   angsuran,
   kemampuan,
@@ -511,13 +549,16 @@ function AutoDecisionCard({
   autoVerify: AutoVerifyStatus;
   autoDecision: AutoDecisionStatus;
   onDecision: (decision: "approved" | "rejected") => void;
-  score: number;
+  creditResult: CreditScoreResult;
   verdict: { label: string; cls: string };
   angsuran?: number;
   kemampuan: number;
 }) {
   const booked = appointment.booked;
   const layak = angsuran != null ? angsuran <= kemampuan : undefined;
+  const { score, factors } = creditResult;
+  const scoreColor = score >= 80 ? "#16A34A" : score >= 65 ? "#0EA5E9" : score >= 50 ? "#F59E0B" : "#EF4444";
+  const [scoreOpen, setScoreOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-bri-line bg-white px-3 py-2.5 shadow-soft">
@@ -528,12 +569,34 @@ function AutoDecisionCard({
 
       {/* Score + capacity verdict */}
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
-          <span className="flex items-center gap-1 text-[9px] text-bri-muted"><Gauge size={11} className="text-bri-blue" /> Credit Scoring</span>
-          <span className="flex items-center gap-1.5">
-            <span className="text-[13px] font-bold tabular-nums text-bri-navy">{score}</span>
-            <span className={cn("rounded-pill px-2 py-px text-[8px] font-bold", verdict.cls)}>{verdict.label}</span>
-          </span>
+        <div className={cn("rounded-lg border bg-bri-bg/40 transition-colors", scoreOpen ? "border-bri-blue/50" : "border-bri-line")}>
+          <button
+            type="button"
+            onClick={() => setScoreOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left"
+          >
+            <span className="flex items-center gap-1 text-[9px] text-bri-muted"><Gauge size={11} className="text-bri-blue" /> Credit Scoring</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[13px] font-bold tabular-nums text-bri-navy">{score}</span>
+              <span className={cn("rounded-pill px-2 py-px text-[8px] font-bold", verdict.cls)}>{verdict.label}</span>
+              <ChevronDown size={13} className={cn("shrink-0 text-bri-muted transition-transform", scoreOpen && "rotate-180")} />
+            </span>
+          </button>
+          {scoreOpen && (
+            <div className="flex flex-col gap-[3px] border-t border-bri-line/70 px-2.5 py-1.5">
+              {factors.map((f) => (
+                <div key={f.label} className="flex items-center gap-1.5">
+                  <span className="w-[72px] shrink-0 truncate text-[7.5px] text-bri-ink" title={f.label}>{f.label}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bri-bg">
+                    <div className="h-full rounded-full" style={{ width: `${(f.points / f.max) * 100}%`, background: scoreColor }} />
+                  </div>
+                  <span className="w-[58px] shrink-0 text-right text-[7px] text-bri-muted">
+                    {f.detail} · <span className="font-semibold text-bri-ink">{f.points}/{f.max}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-between rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
           <span className="flex items-center gap-1 text-[9px] text-bri-muted"><Wallet size={11} className="text-bri-blue" /> Angsuran vs Kemampuan</span>

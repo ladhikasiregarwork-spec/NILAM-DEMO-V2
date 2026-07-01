@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapPin, User, CalendarDays, CalendarCheck, Search, Loader2, LocateFixed, Check, Headset } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MapPin, User, CalendarDays, CalendarCheck, Search, Loader2, LocateFixed, Check, Headset, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/formatRupiah";
 import { computeAutoLoan } from "@/lib/autoLoan";
@@ -17,6 +17,7 @@ interface AppointmentScreenProps {
   setAppointment: (patch: Partial<AppointmentData>) => void;
   /** Borrower data (used to prefill the name from the KTP OCR result). */
   userInput: UserInput;
+  setUserInput: (patch: Partial<UserInput>) => void;
   onConfirm: () => void;
   onGoBack?: () => void;
   canGoBack?: boolean;
@@ -62,9 +63,10 @@ function Field({
 
 /**
  * LocationPicker — pick the meeting point on a map. The customer searches a
- * place/address (OpenStreetMap/Nominatim, proxied via /api/geocode) or taps
- * "lokasi saat ini"; the choice is shown as a pin on a live OSM map preview.
- * Picking stores both a human label (`lokasi`) and coordinates (`lat`/`lon`).
+ * place/address (Google Geocoding API, proxied via /api/geocode) or taps
+ * "lokasi saat ini"; the choice is shown as a pin on a live Google Maps
+ * preview. Picking stores both a human label (`lokasi`) and coordinates
+ * (`lat`/`lon`).
  */
 function LocationPicker({
   appointment,
@@ -148,10 +150,11 @@ function LocationPicker({
     );
   }
 
-  const delta = 0.006;
-  const mapSrc = picked
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${appointment.lon! - delta},${appointment.lat! - delta},${appointment.lon! + delta},${appointment.lat! + delta}&layer=mapnik&marker=${appointment.lat},${appointment.lon}`
-    : null;
+  const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const mapSrc =
+    picked && mapsKey
+      ? `https://www.google.com/maps/embed/v1/place?key=${mapsKey}&q=${appointment.lat},${appointment.lon}&zoom=16&language=id`
+      : null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -229,6 +232,213 @@ function LocationPicker({
 }
 
 /**
+ * RmAgentPicker — custom combobox for choosing a BRIF Agent. Replaces the
+ * native <input list> + <datalist> pair, whose browser-rendered dropdown
+ * doesn't pick up app styling (shows as a plain black-on-white OS list).
+ */
+function RmAgentPicker({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickAway(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickAway);
+    return () => document.removeEventListener("mousedown", onClickAway);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative flex flex-col gap-0.5">
+      <span className="text-[8px] font-medium text-bri-muted">BRIF Agent (opsional)</span>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="relative flex w-full items-center gap-1.5 rounded-lg border border-bri-line bg-white py-1.5 pl-7 pr-7 text-left text-[10px] outline-none focus:border-bri-blue"
+      >
+        <Headset size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-bri-muted" />
+        <span className={cn("truncate", value ? "text-bri-ink" : "text-bri-muted")}>
+          {value || "Pilih — kosong = BRIF Agent terdekat"}
+        </span>
+        <ChevronDown size={11} className={cn("absolute right-2 top-1/2 -translate-y-1/2 text-bri-muted transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full z-20 mt-1 max-h-48 w-full overflow-y-auto scroll-thin rounded-lg border border-bri-line bg-white shadow-soft">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(undefined);
+              setOpen(false);
+            }}
+            className="flex w-full items-center gap-1.5 border-b border-bri-line/60 px-2.5 py-1.5 text-left hover:bg-bri-bg/60"
+          >
+            <X size={10} className="shrink-0 text-bri-muted" />
+            <span className="text-[9px] font-medium text-bri-muted">Kosongkan (terdekat otomatis)</span>
+          </button>
+          {RELATIONSHIP_MANAGERS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                onChange(r.name);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-start gap-1.5 border-b border-bri-line/60 px-2.5 py-1.5 text-left last:border-0 hover:bg-bri-bg/60",
+                value === r.name && "bg-bri-blue/5",
+              )}
+            >
+              <Headset size={10} className="mt-0.5 shrink-0 text-bri-blue" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[9.5px] font-semibold text-bri-ink">{r.name}</span>
+                <span className="block truncate text-[8px] text-bri-muted">{r.branch} · {r.city}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const WEEKDAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const MONTH_LABELS = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/**
+ * DatePicker — custom calendar popover for "Tanggal Diinginkan". Replaces the
+ * native <input type="date">, whose calendar UI is rendered by the OS/browser
+ * chrome and can't be styled to match the app (looks dated, inconsistent
+ * across devices). Stores/emits the same ISO yyyy-mm-dd string.
+ */
+function DatePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = value ? new Date(`${value}T00:00:00`) : undefined;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [viewMonth, setViewMonth] = useState(() => selected ?? today);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickAway(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickAway);
+    return () => document.removeEventListener("mousedown", onClickAway);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) setViewMonth(selected ?? today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = firstOfMonth.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<Date | null> = [
+    ...Array.from({ length: startOffset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+  ];
+
+  const label = selected
+    ? selected.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "Pilih tanggal";
+
+  return (
+    <div ref={rootRef} className="relative flex flex-col gap-0.5">
+      <span className="text-[8px] font-medium text-bri-muted">Tanggal Diinginkan</span>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="relative flex w-full items-center gap-1.5 rounded-lg border border-bri-line bg-white py-1.5 pl-7 pr-2 text-left text-[10px] outline-none focus:border-bri-blue"
+      >
+        <CalendarDays size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-bri-muted" />
+        <span className={cn("truncate", selected ? "text-bri-ink" : "text-bri-muted")}>{label}</span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full z-20 mt-1 w-full rounded-lg border border-bri-line bg-white p-2 shadow-soft">
+          <div className="mb-1.5 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+              className="flex h-5 w-5 items-center justify-center rounded text-bri-muted hover:bg-bri-bg hover:text-bri-ink"
+              aria-label="Bulan sebelumnya"
+            >
+              <ChevronDown size={11} className="rotate-90" />
+            </button>
+            <span className="text-[9.5px] font-semibold text-bri-ink">{MONTH_LABELS[month]} {year}</span>
+            <button
+              type="button"
+              onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+              className="flex h-5 w-5 items-center justify-center rounded text-bri-muted hover:bg-bri-bg hover:text-bri-ink"
+              aria-label="Bulan berikutnya"
+            >
+              <ChevronDown size={11} className="-rotate-90" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-0.5">
+            {WEEKDAY_LABELS.map((w) => (
+              <span key={w} className="flex h-5 items-center justify-center text-[7.5px] font-semibold text-bri-muted">
+                {w}
+              </span>
+            ))}
+            {cells.map((d, i) => {
+              if (!d) return <span key={`empty-${i}`} />;
+              const isPast = d < today;
+              const isSelected = selected && isSameDay(d, selected);
+              const isToday = isSameDay(d, today);
+              return (
+                <button
+                  key={d.toISOString()}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => {
+                    onChange(toIsoDate(d));
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-[9px] tabular-nums transition-colors",
+                    isPast && "cursor-not-allowed text-bri-muted/30",
+                    !isPast && !isSelected && "text-bri-ink hover:bg-bri-bg",
+                    isSelected && "bg-bri-blue font-semibold text-white",
+                    !isSelected && isToday && "font-semibold text-bri-blue",
+                  )}
+                >
+                  {d.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * AppointmentScreen — after the customer agrees to the loan simulation, collect
  * where & when to meet a BRI agent: a map-picked meeting point, the name
  * (prefilled from KTP), and a preferred date.
@@ -239,6 +449,7 @@ export function AppointmentScreen({
   appointment,
   setAppointment,
   userInput,
+  setUserInput,
   onConfirm,
   onGoBack,
   canGoBack,
@@ -301,29 +512,17 @@ export function AppointmentScreen({
           label="Nama Lengkap"
           icon={User}
           value={appointment.nama ?? ""}
-          onChange={(v) => setAppointment({ nama: v })}
+          onChange={(v) => {
+            setAppointment({ nama: v });
+            setUserInput({ nama: v });
+          }}
           placeholder="Nama sesuai KTP"
         />
         <div className="flex flex-col gap-0.5">
-          <label className="flex flex-col gap-0.5">
-            <span className="text-[8px] font-medium text-bri-muted">BRIF Agent (opsional)</span>
-            <div className="relative">
-              <Headset size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-bri-muted" />
-              <input
-                list="rm-options"
-                type="text"
-                value={appointment.rmName ?? ""}
-                placeholder="Pilih atau ketik — kosong = BRIF Agent terdekat"
-                onChange={(e) => setAppointment({ rmName: e.target.value })}
-                className="w-full rounded-lg border border-bri-line bg-white py-1.5 pl-7 pr-2 text-[10px] text-bri-ink outline-none focus:border-bri-blue"
-              />
-              <datalist id="rm-options">
-                {RELATIONSHIP_MANAGERS.map((r) => (
-                  <option key={r.id} value={r.name}>{`${r.branch} · ${r.city}`}</option>
-                ))}
-              </datalist>
-            </div>
-          </label>
+          <RmAgentPicker
+            value={appointment.rmName}
+            onChange={(v) => setAppointment({ rmName: v })}
+          />
           {rm && (
             <p className="flex items-start gap-1 pl-0.5 text-[8px] text-bri-muted">
               <Headset size={9} className="mt-0.5 shrink-0 text-bri-blue" />
@@ -339,10 +538,7 @@ export function AppointmentScreen({
             </p>
           )}
         </div>
-        <Field
-          label="Tanggal Diinginkan"
-          icon={CalendarDays}
-          type="date"
+        <DatePicker
           value={appointment.tanggal ?? ""}
           onChange={(v) => setAppointment({ tanggal: v })}
         />

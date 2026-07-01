@@ -156,7 +156,7 @@ pip install fastapi "uvicorn[standard]" python-multipart pydantic \
 ### 3. Classifier + OCR + SLIK — port 8020
 
 ```bash
-uvicorn classifier_app:app --app-dir local_classifier --host 127.0.0.1 --port 8020
+python -m uvicorn classifier_app:app --app-dir local_classifier --host 127.0.0.1 --port 8020
 ```
 
 Service ini otomatis membaca `.env` di root (`PADDLE_OCR_URL`, `AZURE_OPENAI_*`, `SLIK_CSV`).
@@ -164,7 +164,7 @@ Service ini otomatis membaca `.env` di root (`PADDLE_OCR_URL`, `AZURE_OPENAI_*`,
 ### 4. NPW (Nilai Pasar Wajar) — port 8030
 
 ```bash
-uvicorn house_fair_market_value.app:app --host 127.0.0.1 --port 8030
+python -m uvicorn house_fair_market_value.app:app --host 127.0.0.1 --port 8030
 ```
 
 ### Cek kesehatan

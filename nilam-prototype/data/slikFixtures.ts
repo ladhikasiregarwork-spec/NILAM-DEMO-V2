@@ -16,11 +16,11 @@ const numEnv = (raw: string | undefined, fallback: number): number => {
 };
 
 export const SLIK_NASABAH: SlikResult = {
-  outstanding: numEnv(process.env.NEXT_PUBLIC_SLIK_OUTSTANDING_NASABAH, 150_000_000),
-  angsuranBulanan: numEnv(process.env.NEXT_PUBLIC_SLIK_ANGSURAN_NASABAH, 3_500_000),
+  outstanding: numEnv(process.env.NEXT_PUBLIC_SLIK_OUTSTANDING_NASABAH, 235_880_725),
+  angsuranBulanan: numEnv(process.env.NEXT_PUBLIC_SLIK_ANGSURAN_NASABAH, 2_991_575),
   tunggakan: numEnv(process.env.NEXT_PUBLIC_SLIK_TUNGGAKAN_NASABAH, 0),
   status: process.env.NEXT_PUBLIC_SLIK_STATUS_NASABAH || "Lancar",
-  score: numEnv(process.env.NEXT_PUBLIC_SLIK_SCORE_NASABAH, 735),
+  score: numEnv(process.env.NEXT_PUBLIC_SLIK_SCORE_NASABAH, 760),
 };
 
 export const SLIK_PASANGAN: SlikResult = {

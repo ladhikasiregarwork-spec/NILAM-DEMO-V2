@@ -147,12 +147,15 @@ export function RmAutoApp({ vehicle, calc, appointment, autoVerify, autoVerifyNo
                   </div>
                 )}
 
-                {/* Special discount — RM-adjustable (slider or typed %); re-computes the loan everywhere */}
+                {/* Special discount — RM-adjustable (slider or typed %); re-computes the loan everywhere.
+                    Locked once the RM has decided, so a later edit can't retroactively change an
+                    already-approved/rejected deal. */}
                 {vehicle && (
-                  <div className="rounded-xl border border-bri-line bg-white px-2.5 py-2">
+                  <div className={cn("rounded-xl border border-bri-line bg-white px-2.5 py-2", decided !== "none" && "opacity-60")}>
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-bri-muted">
                         <Tag size={10} className="text-bri-blue" /> Diskon Khusus
+                        {decided !== "none" && <span className="text-[8px] font-normal normal-case text-bri-muted">(terkunci)</span>}
                       </span>
                       <span className="flex items-center gap-1">
                         <input
@@ -160,11 +163,12 @@ export function RmAutoApp({ vehicle, calc, appointment, autoVerify, autoVerifyNo
                           inputMode="numeric"
                           aria-label="Diskon (%)"
                           value={Math.round(discountPct * 100)}
+                          disabled={decided !== "none"}
                           onChange={(e) => {
                             const n = Number(e.target.value.replace(/[^\d]/g, "")) || 0;
                             setAutoLoan({ discountPct: Math.max(0, Math.min(MAX_DISCOUNT_PCT, n)) / 100 });
                           }}
-                          className="w-9 rounded border border-bri-line bg-white px-1 py-0.5 text-right text-[10px] font-bold text-bri-blue tabular-nums outline-none focus:border-bri-blue"
+                          className="w-9 rounded border border-bri-line bg-white px-1 py-0.5 text-right text-[10px] font-bold text-bri-blue tabular-nums outline-none focus:border-bri-blue disabled:cursor-not-allowed"
                         />
                         <span className="text-[10px] font-bold text-bri-blue">%</span>
                       </span>
@@ -175,8 +179,9 @@ export function RmAutoApp({ vehicle, calc, appointment, autoVerify, autoVerifyNo
                       max={MAX_DISCOUNT_PCT}
                       step={1}
                       value={Math.min(MAX_DISCOUNT_PCT, Math.round(discountPct * 100))}
+                      disabled={decided !== "none"}
                       onChange={(e) => setAutoLoan({ discountPct: Number(e.target.value) / 100 })}
-                      className="w-full accent-bri-blue"
+                      className="w-full accent-bri-blue disabled:cursor-not-allowed"
                     />
                     {loan && loan.discount > 0 && (
                       <p className="mt-1 text-[8px] text-emerald-600">

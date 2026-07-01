@@ -296,6 +296,7 @@ export function MobileApp({
             appointment={appointment}
             setAppointment={setAppointment}
             userInput={userInput}
+            setUserInput={setUserInput}
             onConfirm={next}
             onGoBack={goBack}
             canGoBack={canGoBack}

@@ -6,6 +6,7 @@ import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
 import { AutoLoanDashboard } from "@/components/dashboard/AutoLoanDashboard";
 import { RmMobileApp } from "@/components/rm/RmMobileApp";
 import { RmAutoApp } from "@/components/rm/RmAutoApp";
+import { RmPlaceholder, DashboardPlaceholder } from "@/components/layout/UseCasePlaceholder";
 import { useNilamFlow } from "@/hooks/useNilamFlow";
 import { incomePartsFromOcr, kemampuanBayar } from "@/lib/kemampuan";
 import { ltvFromKlas } from "@/data/ltv";
@@ -126,7 +127,9 @@ export default function Page() {
         />
       }
       dashboard={
-        loanType === "auto" ? (
+        loanType === null ? (
+          <DashboardPlaceholder />
+        ) : loanType === "auto" ? (
           <AutoLoanDashboard
             currentStep={currentStep}
             vehicle={vehicle}
@@ -162,7 +165,9 @@ export default function Page() {
         )
       }
       rmMobile={
-        loanType === "auto" ? (
+        loanType === null ? (
+          <RmPlaceholder />
+        ) : loanType === "auto" ? (
           <RmAutoApp
             vehicle={vehicle}
             calc={autoLoan}
