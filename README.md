@@ -92,17 +92,39 @@ Pembukaan → Syarat & Ketentuan → Upload Dokumen → Data Diri
 - **Python** 3.12
 - **Tesseract OCR** — untuk OCR Slip/Mutasi/SK/KK
   - Windows: install ke `C:\Program Files\Tesseract-OCR`, lalu tambahkan ke `PATH`.
-- Model **PaddleOCR** (KTP) ter-*download* otomatis saat pertama kali dijalankan (butuh internet sekali di awal).
+- **OCR KTP/KK** memakai **PaddleOCR remote** via `PADDLE_OCR_URL` (lihat Konfigurasi) — tidak perlu install paddle lokal. Alternatif: install `paddlepaddle paddleocr` (model ter-*download* otomatis saat pertama kali dijalankan).
 
 > **Internet:** aplikasi berjalan di `localhost` dan bisa dipakai offline/di WiFi mana pun. Internet hanya dibutuhkan untuk: (a) unduh model PaddleOCR pertama kali, dan (b) fitur opsional "ambil data dari link Rumah123".
 
 ---
 
-## 🚀 Menjalankan
+## 🚀 Menjalankan Demo
 
-Jalankan **3 proses** (sebaiknya 3 terminal terpisah).
+Demo butuh **3 proses** (sebaiknya 3 terminal terpisah): **Web** (Next.js, port 3010), **Classifier + OCR + SLIK** (8020), dan **NPW** (8030). Web tetap tampil sendiri, tetapi fitur OCR/SLIK/NPW memerlukan dua service Python.
 
-### 1. Web — Next.js
+### 0. Siapkan file lokal (gitignored — tidak ikut ter-commit)
+
+Dua file ini **tidak ada di repo** (berisi data sensitif / kunci API), jadi siapkan sendiri:
+
+- **`SLIK.csv`** di root repo — data SLIK berformat `{nik, data}`, di mana kolom `data` adalah **JSON laporan SLIK** (satu baris per debitur). Dibaca oleh endpoint `/slik`. Tanpa file ini, SLIK kosong dan dashboard memakai fixture bawaan.
+- **`.env`** di root repo — config service Python (otomatis dibaca classifier saat start). Contoh minimal:
+
+  ```dotenv
+  # OCR via PaddleOCR remote (tanpa install paddle lokal) — format /predict/json
+  PADDLE_OCR_URL=http://<host>:<port>/predict/json
+  PADDLE_TIMEOUT=120
+  # Klasifikasi jenis dokumen via Azure OpenAI (opsional; tanpa ini → keyword lokal)
+  AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
+  AZURE_OPENAI_API_KEY=<api-key>
+  AZURE_OPENAI_API_VERSION=2025-01-01-preview
+  AZURE_OPENAI_DEPLOYMENT=gpt-4.1-mini
+  # SLIK_CSV default sudah menunjuk ke ./SLIK.csv, jadi opsional:
+  # SLIK_CSV=/path/ke/SLIK.csv
+  ```
+
+- (Opsional) **`nilam-prototype/.env`** — nilai fixture SLIK frontend (`NEXT_PUBLIC_SLIK_*`), dipakai sebagai *fallback* saat laporan SLIK live (dari CSV) tidak tersedia.
+
+### 1. Web — Next.js (port 3010)
 
 ```bash
 cd nilam-prototype
@@ -112,20 +134,23 @@ npm run dev -- -p 3010
 
 Buka **http://localhost:3010**.
 
-### 2. Service Python (siapkan environment sekali)
+### 2. Service Python (siapkan environment sekali, pakai Python 3.12)
 
 Dari root repo:
 
 ```bash
-python -m venv .venv
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
+python3.12 -m venv .venv
 # Linux/macOS:
-# source .venv/bin/activate
+source .venv/bin/activate
+# Windows PowerShell:
+# .\.venv\Scripts\Activate.ps1
 
-pip install fastapi "uvicorn[standard]" pydantic pandas numpy pyarrow \
-            pypdfium2 pillow paddlepaddle paddleocr openpyxl requests
-# (NPW juga menyediakan: pip install -r house_fair_market_value/requirements.txt)
+pip install fastapi "uvicorn[standard]" python-multipart pydantic \
+            pypdfium2 pillow numpy requests openpyxl python-dotenv \
+            openai pandas pyarrow
+# OCR lokal OPSIONAL — hanya bila TIDAK memakai PADDLE_OCR_URL remote:
+#   pip install paddlepaddle paddleocr
+# NPW juga: pip install -r house_fair_market_value/requirements.txt
 ```
 
 ### 3. Classifier + OCR + SLIK — port 8020
@@ -134,13 +159,23 @@ pip install fastapi "uvicorn[standard]" pydantic pandas numpy pyarrow \
 uvicorn classifier_app:app --app-dir local_classifier --host 127.0.0.1 --port 8020
 ```
 
+Service ini otomatis membaca `.env` di root (`PADDLE_OCR_URL`, `AZURE_OPENAI_*`, `SLIK_CSV`).
+
 ### 4. NPW (Nilai Pasar Wajar) — port 8030
 
 ```bash
 uvicorn house_fair_market_value.app:app --host 127.0.0.1 --port 8030
 ```
 
-> Cek kesehatan: `http://127.0.0.1:8030/health` dan upload dokumen lewat UI untuk menguji classifier.
+### Cek kesehatan
+
+```bash
+curl http://127.0.0.1:8020/health   # {"tesseract":true,"paddle":true,"llm":true,"slik":N}
+curl http://127.0.0.1:8030/health   # {"status":"ok","backend":"linear"}
+```
+
+- `paddle:true` → OCR remote (`PADDLE_OCR_URL`) aktif · `llm:true` → klasifikasi Azure aktif · `slik:N` → jumlah fasilitas SLIK terbaca dari CSV.
+- Uji penuh: buka UI lalu **upload dokumen**. Agar SLIK live muncul, NIK pada KTP harus cocok dengan salah satu baris di `SLIK.csv`.
 
 ---
 
@@ -152,10 +187,12 @@ Semua punya **default**, jadi opsional.
 |---|---|---|
 | `CLASSIFIER_URL` | `http://127.0.0.1:8020` | URL service classifier/OCR/SLIK (dibaca route Next.js). |
 | `NPW_URL` | `http://127.0.0.1:8030` | URL service NPW. |
-| `SLIK_XLSX` | *path sampel* | Path file Excel SLIK yang dibaca classifier. **Set ke file SLIK Anda.** |
+| `SLIK_CSV` | `./SLIK.csv` | Path CSV SLIK (`{nik, data(JSON)}`) yang dibaca classifier. **Sumber SLIK utama.** |
+| `SLIK_XLSX` | *path sampel* | Fallback XLSX (flat, satu baris per fasilitas) — dipakai hanya bila `SLIK_CSV` tidak ada. |
+| `PADDLE_OCR_URL` | *(off)* | Bila di-set, OCR dialihkan ke service PaddleOCR remote (`/predict/json`) — tanpa perlu install paddle lokal. Tanpa ini → PaddleOCR/Tesseract lokal. |
+| `PADDLE_OCR_KEY` | *(off)* | `X-API-Key` untuk service PaddleOCR remote (fallback ke `OCR_API_KEY`). |
+| `AZURE_OPENAI_ENDPOINT` · `_API_KEY` · `_API_VERSION` · `_DEPLOYMENT` | *(off)* | Bila di-set, klasifikasi jenis dokumen memakai Azure OpenAI (mis. `gpt-4.1-mini`). Tanpa ini → keyword lokal. |
 | `TESS_USE_IND` | *(off)* | `1` untuk memakai data bahasa Indonesia Tesseract (`ind`). |
-| `PADDLE_OCR_URL` | *(off)* | Bila di-set, OCR scan dialihkan ke PaddleOCR korporat (kualitas terbaik). Tanpa ini → PaddleOCR/Tesseract lokal. |
-| `PADDLE_OCR_KEY` | *(off)* | `X-API-Key` untuk service PaddleOCR korporat. |
 
 **NPW lookup (opsional):** taruh `location_feature_lookup.parquet` di `house_fair_market_value/artifacts/` untuk taksiran per-lokasi. Bila tidak ada, service memakai **fallback median** secara otomatis.
 

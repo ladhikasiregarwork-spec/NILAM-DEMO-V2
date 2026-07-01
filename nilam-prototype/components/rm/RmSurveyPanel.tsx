@@ -162,8 +162,8 @@ export function RmSurveyPanel({ live, onSubmitSurvey }: RmSurveyPanelProps) {
             <UserCheck size={16} strokeWidth={2.25} />
           </span>
           <div>
-            <h2 className="text-sm font-bold text-bri-navy">Relationship Manager</h2>
-            <p className="text-[10px] text-bri-muted">Antrian Survey Agunan · plafon agunan ≥ Rp500 juta</p>
+            <h2 className="text-sm font-bold text-bri-navy">Collateral Appraisal</h2>
+            <p className="text-[10px] text-bri-muted">Antrian Survey Agunan · setiap pengajuan</p>
           </div>
         </div>
         <span className="flex items-center gap-1.5 rounded-pill border border-bri-line bg-bri-bg px-3 py-1 text-[11px] font-medium text-bri-ink">

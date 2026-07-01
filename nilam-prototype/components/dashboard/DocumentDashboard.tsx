@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Clock } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useOrchestrationFeed } from "@/hooks/useOrchestrationFeed";
 import { deriveDocumentStatuses } from "@/data/documents";
@@ -10,7 +11,7 @@ import type { EmploymentAgreement, SlikReport } from "@/types/profile";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { UserInput } from "@/types/userInput";
-import type { AnalystDecisionStatus } from "@/types/flow";
+import type { SurveyStatus, AnalystDecisionStatus } from "@/types/flow";
 import { ltvFromKlas, type AgunanKlasifikasi } from "@/data/ltv";
 import { computeCreditScore } from "@/engines/scoring/creditScore";
 import { anuitas } from "@/lib/kpr";
@@ -21,6 +22,7 @@ import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
 import { SlikOjkCard } from "./SlikOjkCard";
 import { MatchingCard } from "./MatchingCard";
+import { MutasiRekeningCard } from "./MutasiRekeningCard";
 import { InstallmentCard } from "./InstallmentCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 import { AgunanTabCard } from "./AgunanTabCard";
@@ -62,10 +64,30 @@ interface DocumentDashboardProps {
   /** Collateral classification (shared) + setter. */
   agunanKlas: AgunanKlasifikasi;
   setAgunanKlas: (patch: Partial<AgunanKlasifikasi>) => void;
+  /** Collateral Appraisal status — gates Informasi Agunan + Ringkasan & Keputusan. */
+  surveyStatus: SurveyStatus;
   /** Credit-analyst decision stage (gates the customer's offer). */
   analystDecision: AnalystDecisionStatus;
   /** Analyst approves/rejects in the dashboard → releases / declines the offer. */
   onAnalystDecision: (decision: "approved" | "rejected") => void;
+}
+
+/** Placeholder shown for the collateral cards until the CA approves the survey. */
+function PendingCaCard({ title }: { title: string }) {
+  return (
+    <div className="flex h-full flex-col rounded-xl border border-bri-line bg-white px-3 py-2 shadow-soft">
+      <span className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-bri-muted">{title}</span>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bri-bg">
+          <Clock size={18} className="text-bri-muted/50" strokeWidth={1.8} />
+        </div>
+        <p className="text-[10px] font-semibold text-bri-ink">Menunggu Collateral Appraisal</p>
+        <p className="max-w-[190px] text-[8.5px] leading-relaxed text-bri-muted">
+          Detail tampil setelah agunan disetujui tim Collateral Appraisal.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -76,7 +98,7 @@ interface DocumentDashboardProps {
  *   SLIK (2 tab) | AGUNAN (2 tab) | RINGKASAN & KEPUTUSAN (approve/reject)
  *   PREVIEW DOKUMEN                                       (full width)
  */
-export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas, analystDecision, onAnalystDecision }: DocumentDashboardProps) {
+export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, slik, userInput, previewDocs, npw, npwLand, agunanKlas, setAgunanKlas, surveyStatus, analystDecision, onAnalystDecision }: DocumentDashboardProps) {
   const { statusOf } = useOrchestrationFeed(events);
   const [tab, setTab] = useState<BigTab>("summary");
 
@@ -220,52 +242,70 @@ export function DocumentDashboard({ events, uploads, ocr, docCounts, agunan, sli
           {/* SLIK Ringkasan | INFORMASI + PERHITUNGAN AGUNAN | RINGKASAN & KEPUTUSAN */}
           <div className="grid grid-cols-3 items-start gap-3">
             <SlikOjkCard status={slikStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="summary" />
-            <AgunanTabCard
-              status={thpStatus}
-              agunan={agunan}
-              uangMuka={userInput?.uangMuka}
-              npw={npw}
-              npwLand={npwLand}
-              klas={agunanKlas}
-              setKlas={setAgunanKlas}
-              view="informasi"
-            />
-            <SummaryDecisionCard
-              status={thpStatus}
-              kemampuan={kemampuan}
-              angsuranKpr={kprAngsuran}
-              score={creditResult.score}
-              grade={creditResult.grade}
-              decision={analystDecision}
-              onDecide={onAnalystDecision}
-              breakdown={{
-                harga: hargaRumah,
-                dpAwal,
-                kebutuhan,
-                npw,
-                ltv,
-                plafonAgunan,
-                tenorBulan: tenorTahun * 12,
-                gajiBulanan: income.gajiBulanan,
-                thrTahunan: income.thrTahunan,
-                bonusTahunan: income.bonusTahunan,
-                slikAngsuran: slikTotalAngsuran,
-                factors: creditResult.factors,
-              }}
-            />
+            {/* Informasi Agunan + Ringkasan & Keputusan stay hidden until the
+                Collateral Appraisal team approves the survey. */}
+            {surveyStatus !== "approved" ? (
+              <>
+                <PendingCaCard title="Informasi &amp; Perhitungan Agunan" />
+                <PendingCaCard title="Ringkasan &amp; Keputusan" />
+              </>
+            ) : (
+              <>
+                <AgunanTabCard
+                  status={thpStatus}
+                  agunan={agunan}
+                  uangMuka={userInput?.uangMuka}
+                  npw={npw}
+                  npwLand={npwLand}
+                  klas={agunanKlas}
+                  setKlas={setAgunanKlas}
+                  view="informasi"
+                />
+                <SummaryDecisionCard
+                  status={thpStatus}
+                  kemampuan={kemampuan}
+                  angsuranKpr={kprAngsuran}
+                  score={creditResult.score}
+                  grade={creditResult.grade}
+                  decision={analystDecision}
+                  onDecide={onAnalystDecision}
+                  breakdown={{
+                    harga: hargaRumah,
+                    dpAwal,
+                    kebutuhan,
+                    npw,
+                    ltv,
+                    plafonAgunan,
+                    tenorBulan: tenorTahun * 12,
+                    gajiBulanan: income.gajiBulanan,
+                    thrTahunan: income.thrTahunan,
+                    bonusTahunan: income.bonusTahunan,
+                    slikAngsuran: slikTotalAngsuran,
+                    factors: creditResult.factors,
+                  }}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── DETAIL TRANSAKSI — Transaksi Pemasukan ─────────────────────── */}
+      {/* ── DETAIL TRANSAKSI — Transaksi Pemasukan + Detail Mutasi Rekening ── */}
       {tab === "transaksi" && (
-        <MatchingCard
-          status={ocrStatus}
-          mutasi={ocr.mutasi}
-          slip={ocr.slipGaji}
-          missing={!uploads.slip_gaji || !uploads.mutasi}
-          mode="transaksi"
-        />
+        <div className="flex flex-col gap-3">
+          <MatchingCard
+            status={ocrStatus}
+            mutasi={ocr.mutasi}
+            slip={ocr.slipGaji}
+            missing={!uploads.slip_gaji || !uploads.mutasi}
+            mode="transaksi"
+          />
+          <MutasiRekeningCard
+            status={ocrStatus}
+            mutasi={ocr.mutasi}
+            missing={!uploads.mutasi}
+          />
+        </div>
       )}
 
       {/* ── DETAIL SLIK — Detail Fasilitas + Riwayat Tunggakan ──────────── */}

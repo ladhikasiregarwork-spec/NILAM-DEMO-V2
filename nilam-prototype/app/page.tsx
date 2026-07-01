@@ -155,6 +155,7 @@ export default function Page() {
             npwLand={npwLand}
             agunanKlas={agunanKlas}
             setAgunanKlas={setAgunanKlas}
+            surveyStatus={surveyStatus}
             analystDecision={analystDecision}
             onAnalystDecision={submitAnalystDecision}
           />

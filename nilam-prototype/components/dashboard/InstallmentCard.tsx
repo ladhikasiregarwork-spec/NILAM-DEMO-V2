@@ -50,12 +50,18 @@ export function InstallmentCard({
   const ready = status === "success";
   // Default = OCR-read annual bonus; null means "not yet edited" so it tracks
   // the OCR value even if it loads after mount.
+  // Editable income components — default to the OCR-read values (null = not yet
+  // edited, so they track the OCR value even if it loads after mount).
+  const [gajiEdit, setGajiEdit] = useState<number | null>(null);
+  const [thrEdit, setThrEdit] = useState<number | null>(null);
   const [bonusEdit, setBonusEdit] = useState<number | null>(null);
+  const gaji = gajiEdit ?? gajiBulanan;
+  const thr = thrEdit ?? thrTahunan;
   const bonus = bonusEdit ?? bonusTahunan;
 
-  const penghasilan = penghasilanBulanan(gajiBulanan, thrTahunan, bonus);
+  const penghasilan = penghasilanBulanan(gaji, thr, bonus);
   const dir = dirRate(penghasilan);
-  const kemampuan = kemampuanBayar(gajiBulanan, thrTahunan, bonus, slikAngsuran);
+  const kemampuan = kemampuanBayar(gaji, thr, bonus, slikAngsuran);
 
   const harga = agunan?.harga;
   const plafond = harga != null ? Math.max(0, harga - (uangMuka ?? 0)) : undefined;
@@ -99,8 +105,41 @@ export function InstallmentCard({
 
           {/* Breakdown */}
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-            <Row label="Gaji / bulan" value={formatRupiah(gajiBulanan)} />
-            <Row label="THR / 12" value={`+ ${formatRupiah(Math.round(thrTahunan / 12))}`} />
+            {/* Gaji — editable */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-[9px] text-white/70">
+                Gaji / bulan <Pencil size={8} className="text-white/50" />
+              </span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={gaji.toLocaleString("id-ID")}
+                  onChange={(e) => setGajiEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="Gaji bulanan (bisa diedit)"
+                  className="w-[96px] rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-right text-[9px] font-medium text-white tabular-nums focus:border-white focus:outline-none"
+                />
+                <span aria-hidden className="w-3.5" />
+              </span>
+            </div>
+            {/* THR — editable (full annual, contributes /12) */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-[9px] text-white/70">
+                THR / 12 <Pencil size={8} className="text-white/50" />
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-[10px] text-white/90">+</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={thr.toLocaleString("id-ID")}
+                  onChange={(e) => setThrEdit(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
+                  title="THR tahunan (bisa diedit)"
+                  className="w-[96px] rounded border border-white/30 bg-white/10 px-1.5 py-0.5 text-right text-[9px] font-medium text-white tabular-nums focus:border-white focus:outline-none"
+                />
+                <span className="text-[8px] text-white/50">/12</span>
+              </span>
+            </div>
             {/* Bonus — editable */}
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1 text-[9px] text-white/70">

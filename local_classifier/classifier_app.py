@@ -26,6 +26,17 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 import pypdfium2 as pdfium
 from PIL import Image, ImageOps
 
+# Load config from the repo-root .env (PADDLE_OCR_URL, SLIK_XLSX, etc.) before
+# any module-level os.environ reads below. Real env vars win over .env
+# (override=False); a missing python-dotenv or .env is harmless.
+try:
+    from pathlib import Path as _Path
+    from dotenv import load_dotenv as _load_dotenv
+
+    _load_dotenv(_Path(__file__).resolve().parent.parent / ".env")
+except Exception:
+    pass
+
 # PaddleOCR (local, optional) — disable oneDNN to dodge a paddlepaddle 3.x CPU
 # bug, and skip the model-source connectivity check for faster init.
 os.environ.setdefault("FLAGS_use_mkldnn", "0")
@@ -202,8 +213,78 @@ def _get_paddle(mode: str = "server"):
     return _PADDLE[mode]
 
 
+def _pil_to_png_bytes(pil: "Image.Image") -> bytes:
+    """Encode a PIL image to PNG bytes for upload to the remote OCR service."""
+    buf = io.BytesIO()
+    pil.convert("RGB").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _remote_ocr_pages(data: bytes, filename: str = "") -> "list[dict] | None":
+    """POST raw file bytes to the corp PaddleOCR service (PADDLE_OCR_URL, a
+    /predict/json endpoint) and return its list of page dicts (each with
+    'texts'/'markdown'/'layout'), or None when unset/unreachable/non-200.
+
+    Env: PADDLE_OCR_URL (e.g. http://10.213.191.187:5000/predict/json),
+    PADDLE_OCR_KEY (X-API-Key, optional), PADDLE_TIMEOUT (seconds, default 120),
+    PADDLE_SKIP_ORIENTATION (optional)."""
+    url = os.environ.get("PADDLE_OCR_URL")
+    if not url:
+        return None
+    try:
+        import requests  # lazy
+
+        headers = {}
+        key = os.environ.get("PADDLE_OCR_KEY") or os.environ.get("OCR_API_KEY")
+        if key:
+            headers["X-API-Key"] = key
+        params = {}
+        skip = os.environ.get("PADDLE_SKIP_ORIENTATION")
+        if skip:
+            params["skip_orientation"] = skip
+        resp = requests.post(
+            url, params=params, files={"file": (filename or "doc", data)},
+            headers=headers, timeout=float(os.environ.get("PADDLE_TIMEOUT", "120")),
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json().get("pages") or []
+    except Exception:
+        return None
+
+
+def _remote_ocr_items(data: bytes, filename: str = "") -> "list[dict] | None":
+    """Positioned text fragments from the remote OCR service: each text's quad
+    'poly' is reduced to x (left), yc (vertical centre) and h (height) so the
+    same downstream code that consumes local PaddleOCR boxes works unchanged.
+    Returns None when the service is unset/unreachable (so callers fall back)."""
+    pages = _remote_ocr_pages(data, filename)
+    if pages is None:
+        return None
+    items: list[dict] = []
+    for pg in pages:
+        for t in (pg.get("texts") or []):
+            s = str(t.get("text") or "").strip()
+            poly = t.get("poly")
+            if not s or not poly:
+                continue
+            xs = [float(p[0]) for p in poly]
+            ys = [float(p[1]) for p in poly]
+            y1, y2 = min(ys), max(ys)
+            items.append({"text": s, "x": min(xs), "yc": (y1 + y2) / 2,
+                          "h": max(1.0, y2 - y1)})
+    return items
+
+
 def _paddle_fragments(pil: "Image.Image", mode: str = "server") -> list[str]:
-    """Run local PaddleOCR on a PIL image → ordered list of text fragments."""
+    """PaddleOCR a PIL image → ordered list of text fragments. Uses the remote
+    OCR service when PADDLE_OCR_URL is set, otherwise local PaddleOCR."""
+    if os.environ.get("PADDLE_OCR_URL"):
+        items = _remote_ocr_items(_pil_to_png_bytes(pil))
+        if not items:
+            return []
+        items.sort(key=lambda it: (it["yc"], it["x"]))  # top-to-bottom reading order
+        return [it["text"] for it in items]
     ocr = _get_paddle(mode)
     if ocr is None:
         return []
@@ -218,7 +299,7 @@ def _paddle_fragments(pil: "Image.Image", mode: str = "server") -> list[str]:
 
 
 def paddle_available() -> bool:
-    return _get_paddle("mobile") is not None
+    return bool(os.environ.get("PADDLE_OCR_URL")) or _get_paddle("mobile") is not None
 
 
 def _smart_crop(pil: "Image.Image") -> "Image.Image":
@@ -267,6 +348,8 @@ def _paddle_ktp_fragments(data: bytes, filename: str) -> list[str]:
 def _paddle_items(pil: "Image.Image", mode: str = "mobile") -> list[dict]:
     """Like _paddle_fragments but keeps each box's position (x, vertical centre,
     height) so table rows can be reconstructed."""
+    if os.environ.get("PADDLE_OCR_URL"):
+        return _remote_ocr_items(_pil_to_png_bytes(pil)) or []
     ocr = _get_paddle(mode)
     if ocr is None:
         return []
@@ -412,42 +495,20 @@ def _ocr_pages(pdf: "pdfium.PdfDocument", max_pages: int = 4) -> str:
 
 
 def _paddle_ocr(data: bytes, filename: str) -> str | None:
-    """Corp PaddleOCR markdown service — used only when PADDLE_OCR_URL is set.
-
-    Set env: PADDLE_OCR_URL (e.g. http://10.213.128.80:8090/predict/markdown),
-    PADDLE_OCR_KEY (X-API-Key). Falls back to Tesseract when unset/unreachable.
-    """
-    url = os.environ.get("PADDLE_OCR_URL")
-    if not url:
+    """Corp PaddleOCR service (PADDLE_OCR_URL, a /predict/json endpoint) — used
+    only when PADDLE_OCR_URL is set. Joins the recognised text fragments across
+    all pages. Falls back to Tesseract (returns None) when unset/unreachable."""
+    pages = _remote_ocr_pages(data, filename)
+    if not pages:
         return None
-    try:
-        import requests  # lazy
-
-        headers = {}
-        key = os.environ.get("PADDLE_OCR_KEY") or os.environ.get("OCR_API_KEY")
-        if key:
-            headers["X-API-Key"] = key
-        params = {}
-        skip = os.environ.get("PADDLE_SKIP_ORIENTATION")
-        if skip:
-            params["skip_orientation"] = skip
-        resp = requests.post(
-            url, params=params, files={"file": (filename or "doc", data)},
-            headers=headers, timeout=float(os.environ.get("PADDLE_TIMEOUT", "60")),
-        )
-        if resp.status_code != 200:
-            return None
-        j = resp.json()
-        parts = []
-        for res in ((j.get("data") or {}).get("json_result") or []):
-            for blk in (res.get("parsing_res_list") or []):
-                c = blk.get("block_content")
-                if c:
-                    parts.append(str(c))
-        text = "\n".join(parts)
-        return text if len(re.sub(r"\s", "", text)) >= 20 else None
-    except Exception:
-        return None
+    parts = [
+        s
+        for pg in pages
+        for t in (pg.get("texts") or [])
+        if (s := str(t.get("text") or "").strip())
+    ]
+    text = "\n".join(parts)
+    return text if len(re.sub(r"\s", "", text)) >= 20 else None
 
 
 def extract_text(data: bytes, filename: str = "") -> str:
@@ -491,6 +552,105 @@ def classify_text(text: str) -> tuple[str, str, dict[str, int]]:
     return best, conf, scores
 
 
+# ── LLM classification (Azure OpenAI, optional) ──────────────────────────────
+# When AZURE_OPENAI_* are configured (.env), the document-type decision is made
+# by the LLM (semantic, robust to noisy OCR); otherwise we keep the offline
+# keyword scoring. The prompt/schema mirror ocr_classifier/llm_classifier.py.
+
+_LLM_LABELS = {"ktp", "kk", "sk", "slip", "mutasi", "unknown"}
+
+_LLM_SYSTEM_PROMPT = """You classify a single Indonesian document into exactly \
+one type, using the OCR-extracted text provided. The text may be noisy (OCR \
+artefacts, merged words, missing spaces); rely on the strongest signals.
+
+Choose ONE document_type from:
+- "ktp" — Kartu Tanda Penduduk (national ID for ONE person): "KARTU TANDA \
+PENDUDUK", a single 16-digit NIK, "Tempat/Tgl Lahir", "Jenis Kelamin", "Alamat".
+- "kk" — Kartu Keluarga (family card): "KARTU KELUARGA", a family-card number, \
+"Nama Kepala Keluarga", and a TABLE of multiple family members with NIK column.
+- "sk" — Surat Keputusan / Surat Keterangan (decree/letter): "SURAT KEPUTUSAN" \
+or "SURAT KETERANGAN", "Nomor:", "Menimbang", "Memutuskan", a signatory.
+- "slip" — Slip Gaji (salary slip): "SLIP GAJI", "Gaji Pokok", "Tunjangan", \
+"Potongan", "Take Home Pay", an earnings-minus-deductions layout.
+- "mutasi" — Mutasi Rekening / Rekening Koran (bank statement): a bank name, \
+account number, period, and a table of dated transactions with Debit/Kredit/Saldo.
+- "unknown" — none of the above, or blank / illegible / insufficient text.
+
+Set confidence to "high", "medium", or "low". Prefer "unknown" when the text \
+is sparse or ambiguous. Give a one-line reasoning citing the decisive signal(s)."""
+
+_LLM_SCHEMA = {
+    "name": "document_classification",
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "document_type": {"type": "string", "enum": sorted(_LLM_LABELS)},
+            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["document_type", "confidence", "reasoning"],
+    },
+    "strict": True,
+}
+
+_LLM_CLIENT = None  # cached AzureOpenAI client (built once per process)
+
+
+def llm_available() -> bool:
+    return bool(os.environ.get("AZURE_OPENAI_ENDPOINT") and os.environ.get("AZURE_OPENAI_API_KEY"))
+
+
+def _azure_client():
+    """Lazy, cached AzureOpenAI client. Returns None when unconfigured/unbuildable."""
+    global _LLM_CLIENT
+    if _LLM_CLIENT is not None:
+        return _LLM_CLIENT
+    if not llm_available():
+        return None
+    try:
+        from openai import AzureOpenAI
+        _LLM_CLIENT = AzureOpenAI(
+            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+            api_key=os.environ["AZURE_OPENAI_API_KEY"],
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
+            timeout=float(os.environ.get("LLM_REQUEST_TIMEOUT_S", "120")),
+        )
+        return _LLM_CLIENT
+    except Exception:
+        return None
+
+
+def _llm_classify(text: str) -> "tuple[str, str, str] | None":
+    """Classify document text via Azure OpenAI → (document_type, confidence,
+    reasoning), or None when unconfigured / on any error (caller then falls
+    back to keyword scoring)."""
+    if not text.strip():
+        return None
+    client = _azure_client()
+    if client is None:
+        return None
+    try:
+        import json  # lazy
+        cap = int(os.environ.get("MAX_CLASSIFY_CHARS", "8000"))
+        completion = client.chat.completions.create(
+            model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini"),
+            messages=[
+                {"role": "system", "content": _LLM_SYSTEM_PROMPT},
+                {"role": "user", "content": text[:cap]},
+            ],
+            response_format={"type": "json_schema", "json_schema": _LLM_SCHEMA},
+            temperature=0,
+        )
+        decoded = json.loads(completion.choices[0].message.content or "{}")
+        dt, conf = decoded.get("document_type"), decoded.get("confidence")
+        if dt in _LLM_LABELS and conf in {"high", "medium", "low"}:
+            return dt, conf, decoded.get("reasoning", "")
+    except Exception:
+        return None
+    return None
+
+
 def _classify_bytes(filename: str, data: bytes) -> dict:
     if not data:
         return {"filename": filename, "document_type": "unknown", "confidence": "low", "scores": {}, "error": "empty"}
@@ -504,8 +664,18 @@ def _classify_bytes(filename: str, data: bytes) -> dict:
             frags = _paddle_ktp_fragments(data, filename)
             if frags:
                 text += "\n" + "\n".join(frags)
+        # Prefer the LLM decision when Azure is configured; fall back to the
+        # offline keyword scorer on any error / when unconfigured.
         doc_type, conf, scores = classify_text(text)
-        result = {"filename": filename, "document_type": doc_type, "confidence": conf, "scores": scores}
+        engine = "keyword"
+        llm = _llm_classify(text)
+        if llm is not None:
+            doc_type, conf, reasoning = llm
+            engine = "llm"
+        result = {"filename": filename, "document_type": doc_type, "confidence": conf,
+                  "scores": scores, "engine": engine}
+        if llm is not None and reasoning:
+            result["reasoning"] = reasoning
         if doc_type == "ktp" and frags:
             result["fields"] = extract_ktp_from_fragments(frags)
         return result
@@ -824,8 +994,35 @@ def _txn_key(t: dict):
 
 # ── SLIK OJK (read the parsed Excel: one row per credit facility) ────────────
 
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Preferred source: a CSV of {nik, data} where `data` is the JSON SLIK report
+# (one row per debitur). Falls back to the legacy flat XLSX when the CSV is absent.
+_SLIK_CSV = os.environ.get("SLIK_CSV", os.path.join(_REPO_ROOT, "SLIK.csv"))
 _SLIK_XLSX = os.environ.get("SLIK_XLSX", r"C:\Users\BRI\Downloads\sample_slik_arie_parsing.xlsx")
 _SLIK_ROWS: list[dict] = []
+
+
+def _flatten_slik_json(nik, data_str) -> list[dict]:
+    """Expand one CSV row (nik + JSON SLIK report) into flat per-facility dicts
+    with lowercased keys (+ nik + debtor name) — the shape the /slik endpoint
+    consumes, so the rest of the logic is unchanged from the old XLSX path."""
+    import json  # lazy
+    out: list[dict] = []
+    try:
+        obj = json.loads(data_str)
+    except Exception:
+        return out
+    pokok = obj.get("DataPokokDebitur") or {}
+    header = obj.get("Header") or {}
+    nama = pokok.get("namaDebitur") or header.get("nama_debitur")
+    row_nik = nik or pokok.get("noIdentitas") or header.get("no_identitas")
+    for fac in (obj.get("FasilitasKredit") or []):
+        if isinstance(fac, dict):
+            flat = {str(k).lower(): v for k, v in fac.items()}
+            flat["nik"] = row_nik
+            flat["_nama"] = nama
+            out.append(flat)
+    return out
 
 
 def _slik_num(s) -> float:
@@ -859,6 +1056,21 @@ def _digits(v) -> str:
 def _load_slik_rows() -> list[dict]:
     if _SLIK_ROWS:
         return _SLIK_ROWS
+    # Preferred: CSV of {nik, data(JSON SLIK report)} — one row per debitur.
+    try:
+        if os.path.exists(_SLIK_CSV):
+            import csv  # lazy
+            # The `data` column is JSON with backslash-escaped quotes (\"), not
+            # CSV-doubled quotes — so read with escapechar="\\", doublequote=False.
+            with open(_SLIK_CSV, newline="", encoding="utf-8-sig") as f:
+                for row in csv.DictReader(f, escapechar="\\", doublequote=False):
+                    rl = {str(k).strip().lower(): v for k, v in row.items() if k}
+                    _SLIK_ROWS.extend(_flatten_slik_json(rl.get("nik"), rl.get("data")))
+            if _SLIK_ROWS:
+                return _SLIK_ROWS
+    except Exception:
+        pass
+    # Fallback: legacy flat XLSX (one row per facility).
     try:
         import openpyxl
         rows = list(openpyxl.load_workbook(_SLIK_XLSX, read_only=True, data_only=True).active.iter_rows(values_only=True))
@@ -881,15 +1093,20 @@ def slik(nik: str) -> dict:
         return {"ok": False, "error": f"NIK {nik} tidak ada di data SLIK"}
     loans = []
     total_aktif = 0
+    total_tunggakan = 0
     worst = 1
+    nama = None
     for d in facs:
+        nama = nama or d.get("_nama")
         plafon = _slik_num(d.get("plafonawal") or d.get("plafon"))
         bunga = _slik_num(d.get("sukubunga"))  # already in percent
         months = _slik_months(d.get("tanggalmulai"), d.get("tanggaljatuhtempo"))
         angsuran = _anuitas(plafon, bunga / 100, months)
         aktif = int(_slik_num(d.get("kondisi"))) == 0  # 0 = aktif, 2 = lunas/non-aktif
+        tunggakan = _slik_num(d.get("tunggakanpokok")) + _slik_num(d.get("tunggakanbunga"))
         if aktif:
             total_aktif += angsuran
+        total_tunggakan += tunggakan
         kual = int(_slik_num(d.get("kolektibilitas")) or 1)
         worst = max(worst, kual)
         loans.append({
@@ -904,10 +1121,12 @@ def slik(nik: str) -> dict:
             "aktif": aktif,
             "status": "Aktif" if aktif else (d.get("kondisiket") or "Non-Aktif"),
             "kualitas": kual,
+            "tunggakan": round(tunggakan),
         })
     return {
-        "ok": True, "nik": nik, "namaDebitur": None,
+        "ok": True, "nik": nik, "namaDebitur": nama,
         "loans": loans, "totalAngsuran": round(total_aktif),
+        "totalTunggakan": round(total_tunggakan),
         "kolekTerburuk": worst, "totalFasilitas": len(loans),
     }
 
@@ -916,7 +1135,7 @@ def slik(nik: str) -> dict:
 def health() -> dict:
     return {"status": "ok", "tesseract": bool(shutil.which("tesseract")),
             "lang": _LANG, "paddle": bool(os.environ.get("PADDLE_OCR_URL")),
-            "slik": len(_load_slik_rows())}
+            "llm": llm_available(), "slik": len(_load_slik_rows())}
 
 
 @app.post("/classify")

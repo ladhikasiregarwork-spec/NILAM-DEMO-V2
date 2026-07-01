@@ -9,6 +9,7 @@ import type { OcrResults, ClassifyResult, PreviewDoc } from "@/types/ocrExtract"
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { SlikReport } from "@/types/profile";
+import type { SlikResult } from "@/types/engines";
 import type { UserInput } from "@/types/userInput";
 import type { LoanType, Vehicle, AutoLoanCalc, AppointmentData, AutoVerifyStatus, AutoDecisionStatus } from "@/types/auto";
 import { DEFAULT_DP_PCT, bestSchemeForTenor } from "@/data/autoRates";
@@ -32,6 +33,27 @@ import {
   DEMO_AGUNAN,
   DEMO_DOC_COUNTS,
 } from "@/data/demoSeed";
+
+// Kolektibilitas (1..5) → label + a representative SLIK score for the card.
+const KOLEK_LABEL = ["", "Lancar", "DPK", "Kurang Lancar", "Diragukan", "Macet"];
+const KOLEK_SCORE = [0, 760, 680, 580, 500, 420];
+
+/**
+ * Derive the SLIK summary card (SlikResult) from the live SLIK report served by
+ * /api/slik (sourced from SLIK.csv). Falls back to the given fixture for fields
+ * SLIK doesn't carry. This is what un-hardcodes the SLIK card from .env.
+ */
+function slikResultFromReport(r: SlikReport, fallback: SlikResult): SlikResult {
+  const outstanding = r.loans.reduce((s, l) => s + (l.baki || 0), 0);
+  const tunggakan = r.totalTunggakan ?? r.loans.reduce((s, l) => s + (l.tunggakan || 0), 0);
+  return {
+    outstanding,
+    angsuranBulanan: r.totalAngsuran ?? fallback.angsuranBulanan,
+    tunggakan,
+    status: KOLEK_LABEL[r.kolekTerburuk] || fallback.status,
+    score: KOLEK_SCORE[r.kolekTerburuk] || fallback.score,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -892,7 +914,12 @@ export function useNilamFlow() {
       validasi: { monthsVerified: 12, complete: true },
       fraud:    FRAUD_RESULT,
       identity: joint ? IDENTITY_PASANGAN : null,
-      slik:     { nasabah: SLIK_NASABAH, pasangan: joint ? SLIK_PASANGAN : undefined },
+      // SLIK card: prefer the live report (SLIK.csv, matched by KTP NIK); fall
+      // back to the fixture only when no report was retrieved.
+      slik:     {
+        nasabah: s.slik ? slikResultFromReport(s.slik, SLIK_NASABAH) : SLIK_NASABAH,
+        pasangan: joint ? SLIK_PASANGAN : undefined,
+      },
       income:   {
         nasabah: NASABAH_INCOME,
         pasangan: joint ? PASANGAN_INCOME : undefined,
