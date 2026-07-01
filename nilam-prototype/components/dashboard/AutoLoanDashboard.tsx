@@ -22,7 +22,9 @@ import {
 import { cn } from "@/lib/cn";
 import { formatRupiah, formatJuta } from "@/lib/formatRupiah";
 import { anuitas } from "@/lib/kpr";
-import { computeAutoLoan, autoLoanScore } from "@/lib/autoLoan";
+import { computeAutoLoan } from "@/lib/autoLoan";
+import { computeCreditScore } from "@/engines/scoring/creditScore";
+import { usiaDariKtp } from "@/lib/usia";
 import { schemeById } from "@/data/autoRates";
 import { assignRm } from "@/data/relationshipManagers";
 import { incomePartsFromOcr, kemampuanBayar, penghasilanBulanan, dirRate } from "@/lib/kemampuan";
@@ -42,6 +44,7 @@ import { UserInformationCard } from "./UserInformationCard";
 import { EmploymentAgreementCard } from "./EmploymentAgreementCard";
 import { MatchingCard } from "./MatchingCard";
 import { SlikOjkCard } from "./SlikOjkCard";
+import { CreditScoringCard } from "./CreditScoringCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 
 const BIG_TABS = [
@@ -183,13 +186,42 @@ export function AutoLoanDashboard({
   const loan = vehicle ? computeAutoLoan(vehicle.price, calc.dpPct, scheme.rate, calc.tenorMonths, calc.discountPct) : undefined;
   const rm = assignRm(appointment);
   const years = calc.tenorMonths / 12;
-  const score = autoLoanScore(calc.dpPct, calc.tenorMonths);
-  const verdict =
-    score >= 80
-      ? { label: "SANGAT LAYAK", cls: "bg-emerald-50 text-emerald-600" }
-      : score >= 70
-      ? { label: "LAYAK", cls: "bg-bri-blue/10 text-bri-blue" }
-      : { label: "PERLU REVIEW", cls: "bg-amber-50 text-amber-600" };
+
+  // Credit Scoring (9 factors) — the SAME engine the mortgage dashboard uses,
+  // with the financed vehicle standing in for the house: OTR price → harga,
+  // DP → uang muka, financed amount → plafond, monthly instalment (KKB + SLIK).
+  // This is the single "Credit Scoring" number used across the whole KKB
+  // dashboard (status bar, decision card, and the Kendaraan tab).
+  const age = usiaDariKtp(ocr.ktp?.tanggalLahir);
+  const slipThp = ocr.slipGaji?.records?.find((r) => r.thp != null)?.thp;
+  const monthlyIncome = slipThp ?? ocr.mutasi?.gajiNominal ?? income.gajiBulanan ?? 0;
+  const punyaSimpananBri = !!ocr.mutasi || slikLoans.some((l) => /bri|rakyat indonesia/i.test(l.lembaga));
+  const creditResult = computeCreditScore({
+    pendidikan: userInput?.pendidikan,
+    statusKawin: userInput?.statusKawin ?? ocr.ktp?.statusPerkawinan,
+    usia: userInput?.usia ?? age,
+    punyaSimpananBri,
+    jangkaWaktu: calc.tenorMonths / 12,
+    hargaRumah: vehicle?.price,
+    uangMuka: loan?.dp,
+    jumlahTanggungan: userInput?.jumlahTanggungan,
+    incomeMonthly: monthlyIncome,
+    angsuranBulanan: (loan?.angsuran ?? 0) + slikTotalAngsuran,
+    plafond: loan?.financed,
+  });
+  const score = creditResult.score;
+  // Verdict pill = the credit grade (A/B/C/D), coloured by score band.
+  const verdict = {
+    label: creditResult.grade,
+    cls:
+      score >= 80
+        ? "bg-emerald-50 text-emerald-600"
+        : score >= 65
+        ? "bg-bri-blue/10 text-bri-blue"
+        : score >= 50
+        ? "bg-amber-50 text-amber-600"
+        : "bg-red-50 text-red-600",
+  };
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto scroll-thin bg-[#F5F7FA] p-3">
@@ -275,9 +307,14 @@ export function AutoLoanDashboard({
             </div>
           </div>
 
-          {/* SLIK Ringkasan | STRUKTUR KREDIT KENDARAAN | RINGKASAN & KEPUTUSAN */}
-          <div className="grid grid-cols-3 items-start gap-3">
-            <SlikOjkCard status={docStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={score} view="summary" />
+          {/* SLIK Ringkasan | CREDIT SCORING */}
+          <div className="grid grid-cols-2 items-start gap-3">
+            <SlikOjkCard status={docStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={creditResult.score} view="summary" />
+            <CreditScoringCard status={docStatus} result={creditResult} />
+          </div>
+
+          {/* STRUKTUR KREDIT KENDARAAN | RINGKASAN & KEPUTUSAN */}
+          <div className="grid grid-cols-2 items-start gap-3">
             <VehicleStructureCard vehicle={vehicle} calc={calc} loan={loan} />
             <AutoDecisionCard
               currentStep={currentStep}
@@ -492,7 +529,7 @@ function AutoDecisionCard({
       {/* Score + capacity verdict */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between rounded-lg border border-bri-line bg-bri-bg/40 px-2.5 py-1.5">
-          <span className="flex items-center gap-1 text-[9px] text-bri-muted"><Gauge size={11} className="text-bri-blue" /> Skor Kelayakan</span>
+          <span className="flex items-center gap-1 text-[9px] text-bri-muted"><Gauge size={11} className="text-bri-blue" /> Credit Scoring</span>
           <span className="flex items-center gap-1.5">
             <span className="text-[13px] font-bold tabular-nums text-bri-navy">{score}</span>
             <span className={cn("rounded-pill px-2 py-px text-[8px] font-bold", verdict.cls)}>{verdict.label}</span>
@@ -653,7 +690,7 @@ function VehicleTab({
           <p className="mt-2 text-[9px] text-bri-muted">Skema bunga efektif {scheme.rateLabel} — angsuran tetap, porsi bunga menurun seiring sisa pokok berkurang.</p>
         </Card>
 
-        <Card title="Kelayakan Kredit" icon={Gauge}>
+        <Card title="Credit Scoring" icon={Gauge}>
           <div className="mb-3 flex items-center gap-3">
             <div className="relative flex h-20 w-20 items-center justify-center">
               <svg viewBox="0 0 36 36" className="h-20 w-20 -rotate-90">
@@ -664,7 +701,7 @@ function VehicleTab({
             </div>
             <div>
               <span className={cn("rounded-pill px-2.5 py-1 text-[11px] font-bold", verdict.cls)}>{verdict.label}</span>
-              <p className="mt-1 text-[9px] text-bri-muted">Skor indikatif berdasarkan DP &amp; tenor.</p>
+              <p className="mt-1 text-[9px] text-bri-muted">Skor kredit 9 faktor · sorotan unit (DP, tenor, bunga) di bawah.</p>
             </div>
           </div>
           <div className="flex flex-col gap-1.5 text-[10px]">

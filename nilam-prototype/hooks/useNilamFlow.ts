@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useReducer, useRef, type Dispatch } from "react";
 import type { FlowStep, PersonaConfig, SurveyStatus, AnalystDecisionStatus } from "@/types/flow";
-import { SURVEY_THRESHOLD } from "@/types/flow";
 import type { OrchestrationEvent, NodeId } from "@/types/orchestration";
 import type { CustomerIncome, ComponentKey, ComponentMode } from "@/types/income";
 import type { OcrResults, ClassifyResult, PreviewDoc } from "@/types/ocrExtract";
@@ -900,9 +899,8 @@ export function useNilamFlow() {
     // Read the LATEST state from the ref (never a stale closure).
     const s = stateRef.current;
 
-    // Collateral price decides whether an RM survey gate applies.
-    const hargaAgunan = s.agunan?.harga ?? 0;
-    const needsSurvey = hargaAgunan >= SURVEY_THRESHOLD;
+    // Every application now routes through the RM collateral appraisal (survey),
+    // regardless of the collateral price — no threshold gate.
 
     // Derive joint at submit time from the current jointAnswer.
     const joint = s.jointAnswer === "ya";
@@ -947,18 +945,13 @@ export function useNilamFlow() {
     };
 
     // Run the pipeline. Only advance if this specific orchestrator instance is
-    // still the active one. Collateral ≥ threshold goes to the appraisal queue
-    // (waiting screen) first; otherwise it skips straight to the analyst stage.
-    // In both cases the offer is released only after the Credit Analyst approves.
+    // still the active one. Every application goes to the RM appraisal queue
+    // (waiting screen) first; the offer is released only after the collateral
+    // appraisal approves and then the Credit Analyst approves.
     orch.run(s.persona, outputs, emit).then(() => {
       if (orchestratorRef.current !== orch) return;
-      if (needsSurvey) {
-        dispatch({ type: "setSurveyStatus", status: "pending" });
-        dispatch({ type: "goTo", step: "survey" });
-      } else {
-        dispatch({ type: "setAnalystDecision", status: "pending" });
-        dispatch({ type: "goTo", step: "analyst_decision" });
-      }
+      dispatch({ type: "setSurveyStatus", status: "pending" });
+      dispatch({ type: "goTo", step: "survey" });
     });
   }, [cancelOrchestrator]);
 
