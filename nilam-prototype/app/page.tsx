@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { MobileApp } from "@/components/mobile/MobileApp";
 import { DocumentDashboard } from "@/components/dashboard/DocumentDashboard";
 import { AutoLoanDashboard } from "@/components/dashboard/AutoLoanDashboard";
+import { CreditCardDashboard } from "@/components/dashboard/CreditCardDashboard";
 import { RmMobileApp } from "@/components/rm/RmMobileApp";
 import { RmAutoApp } from "@/components/rm/RmAutoApp";
 import { RmPlaceholder, DashboardPlaceholder } from "@/components/layout/UseCasePlaceholder";
@@ -51,6 +52,14 @@ export default function Page() {
     setAppointment,
     submitAutoVerify,
     submitAutoDecision,
+    card,
+    cardLimit,
+    cardDecision,
+    cardGrantedLimit,
+    setCard,
+    setCardLimit,
+    submitCard,
+    submitCardDecision,
     userInput,
     setUserInput,
     previewDocs,
@@ -111,6 +120,13 @@ export default function Page() {
           autoVerify={autoVerify}
           autoDecision={autoDecision}
           autoVerifyNote={autoVerifyNote}
+          card={card}
+          setCard={setCard}
+          cardLimit={cardLimit}
+          setCardLimit={setCardLimit}
+          cardDecision={cardDecision}
+          cardGrantedLimit={cardGrantedLimit}
+          submitCard={submitCard}
           start={start}
           editAgunan={editAgunan}
           next={next}
@@ -138,6 +154,19 @@ export default function Page() {
             autoVerify={autoVerify}
             autoDecision={autoDecision}
             onDecision={submitAutoDecision}
+            uploads={uploads}
+            ocr={ocr}
+            slik={slik}
+            userInput={userInput}
+            previewDocs={previewDocs}
+          />
+        ) : loanType === "cc" ? (
+          <CreditCardDashboard
+            currentStep={currentStep}
+            card={card}
+            cardLimit={cardLimit}
+            cardDecision={cardDecision}
+            onDecision={submitCardDecision}
             uploads={uploads}
             ocr={ocr}
             slik={slik}
@@ -177,6 +206,9 @@ export default function Page() {
             onSubmitVerify={submitAutoVerify}
             setAutoLoan={setAutoLoan}
           />
+        ) : loanType === "cc" ? (
+          // Credit-card applications go straight to the analyst — no RM survey.
+          <RmPlaceholder />
         ) : (
           <RmMobileApp
             live={{ nama: userInput?.nama, agunan, npw, npwLand, surveyStatus, surveyValue, surveyNote }}

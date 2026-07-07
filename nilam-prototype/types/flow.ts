@@ -16,7 +16,14 @@ export type FlowStep =
   | "vehicle_search"
   | "vehicle_detail"
   | "appointment"
-  | "appointment_done";
+  | "appointment_done"
+  // Credit-card (Kartu Kredit) branch — analyst approves a limit FIRST, then the
+  // customer picks a card within that limit.
+  | "card_review"
+  | "card_select"
+  | "card_detail"
+  | "card_done"
+  | "card_decision";
 
 export interface PersonaConfig {
   nasabahPayroll: boolean;

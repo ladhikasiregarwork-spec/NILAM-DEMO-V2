@@ -12,6 +12,11 @@ import type { LoanType } from "@/types/auto";
  *   Auto → vehicle_search → vehicle_detail (deskripsi + kalkulator)
  *          → appointment (janji temu agen)
  *          → appointment_done (verifikasi RM → persetujuan analis → ringkasan)
+ *   CC   → card_review (ajukan → analis hitung maksimum limit + setujui limit)
+ *          → card_select (BRI Touch / BRI Easy, dibatasi limit disetujui)
+ *          → card_detail (konfirmasi limit + benefit → terbitkan). Tanpa RM.
+ *          Persetujuan Credit Analyst terjadi DULU (di card_review), baru nasabah
+ *          memilih kartu. Ditolak → berhenti di card_review.
  *
  * Until a product is chosen (`loanType` null), the flow ends at `loan_type`.
  * `survey` selalu ada di urutan KPR agar bisa di-navigasi; untuk agunan
@@ -23,6 +28,9 @@ export function planFlow(_p?: PersonaConfig, loanType?: LoanType | null): FlowSt
   const base: FlowStep[] = ["opening", "term_condition", "requirement", "loan_type"];
   if (loanType === "auto") {
     return [...base, "vehicle_search", "vehicle_detail", "appointment", "appointment_done"];
+  }
+  if (loanType === "cc") {
+    return [...base, "card_review", "card_select", "card_detail", "card_done"];
   }
   if (loanType === "kpr") {
     return [...base, "data_diri", "agunan", "processing", "survey", "analyst_decision", "offering", "disburse"];

@@ -41,8 +41,17 @@ const AUTO_NODES: StepNode[] = [
   { label: "Selesai", steps: ["appointment_done"] },
 ];
 
+const CC_NODES: StepNode[] = [
+  ...BASE,
+  { label: "Perse-", sublabel: "tujuan", steps: ["card_review"] },
+  { label: "Kartu", steps: ["card_select"] },
+  { label: "Terbit-", sublabel: "kan", steps: ["card_detail"] },
+  { label: "Selesai", steps: ["card_done"] },
+];
+
 function nodesFor(loanType: LoanType | null): StepNode[] {
   if (loanType === "auto") return AUTO_NODES;
+  if (loanType === "cc") return CC_NODES;
   if (loanType === "kpr") return KPR_NODES;
   return BASE;
 }

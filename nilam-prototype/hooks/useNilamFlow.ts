@@ -11,6 +11,7 @@ import type { SlikReport } from "@/types/profile";
 import type { SlikResult } from "@/types/engines";
 import type { UserInput } from "@/types/userInput";
 import type { LoanType, Vehicle, AutoLoanCalc, AppointmentData, AutoVerifyStatus, AutoDecisionStatus } from "@/types/auto";
+import type { CreditCard, CardDecisionStatus } from "@/types/card";
 import { DEFAULT_DP_PCT, bestSchemeForTenor } from "@/data/autoRates";
 import { usiaDariKtp } from "@/lib/usia";
 import { type AgunanKlasifikasi, DEFAULT_KLASIFIKASI } from "@/data/ltv";
@@ -107,6 +108,14 @@ export interface NilamState {
   autoVerifyNote?: string;
   /** Auto-loan: analyst decision stage (after RM verification). */
   autoDecision: AutoDecisionStatus;
+  /** Credit-card: the chosen product (BRI Touch / BRI Easy). */
+  card?: CreditCard;
+  /** Credit-card: requested credit limit (IDR); 0 until a card is chosen. */
+  cardLimit: number;
+  /** Credit-card: analyst decision stage (no RM step). Now happens FIRST, at card_review. */
+  cardDecision: CardDecisionStatus;
+  /** Credit-card: maximum limit approved by the analyst (IDR). Caps card selection. */
+  cardGrantedLimit?: number;
 }
 
 /** Default auto-loan calculator selections. */
@@ -153,6 +162,10 @@ export type NilamAction =
   | { type: "setAppointment"; patch: Partial<AppointmentData> }
   | { type: "submitAutoVerify"; decision: "approved" | "rejected"; note?: string }
   | { type: "submitAutoDecision"; decision: "approved" | "rejected" }
+  | { type: "setCard"; card: CreditCard }
+  | { type: "setCardLimit"; value: number }
+  | { type: "submitCard" }
+  | { type: "submitCardDecision"; decision: "approved" | "rejected"; grantedLimit?: number }
   | { type: "reset" };
 
 // ---------------------------------------------------------------------------
@@ -181,6 +194,8 @@ export function initialState(): NilamState {
     appointment: {},
     autoVerify: "none",
     autoDecision: "none",
+    cardLimit: 0,
+    cardDecision: "none",
   };
 }
 
@@ -210,6 +225,8 @@ function resetWithPersona(persona: PersonaConfig): NilamState {
     appointment: {},
     autoVerify: "none",
     autoDecision: "none",
+    cardLimit: 0,
+    cardDecision: "none",
   };
 }
 
@@ -419,6 +436,37 @@ export function nilamReducer(state: NilamState, action: NilamAction): NilamState
 
     case "submitAutoDecision":
       return { ...state, autoDecision: action.decision === "approved" ? "approved" : "rejected" };
+
+    case "setCard":
+      // Choosing a card resets the requested limit to that card's default.
+      return { ...state, card: action.card, cardLimit: action.card.defaultLimit };
+
+    case "setCardLimit":
+      return { ...state, cardLimit: action.value };
+
+    case "submitCard": {
+      // Application submitted from card_review → hand off to the Credit Analyst
+      // (no RM step). The customer STAYS on card_review (waiting screen) while
+      // the analyst computes the maximum limit and decides.
+      return { ...state, cardDecision: "pending" };
+    }
+
+    case "submitCardDecision": {
+      // Analyst can only decide once the application is pending. On approval the
+      // granted limit is recorded and the customer advances to card_select to
+      // pick a card within that limit. On rejection they stay on card_review.
+      if (state.cardDecision !== "pending") return state;
+      if (action.decision === "approved") {
+        const idx = state.steps.indexOf("card_select");
+        return {
+          ...state,
+          cardDecision: "approved",
+          cardGrantedLimit: action.grantedLimit,
+          stepIndex: idx === -1 ? state.stepIndex : idx,
+        };
+      }
+      return { ...state, cardDecision: "rejected" };
+    }
 
     case "reset":
       return initialState();
@@ -759,6 +807,26 @@ export function useNilamFlow() {
     dispatch({ type: "submitAutoDecision", decision });
   }, []);
 
+  // ── Credit-card (Kartu Kredit) actions ────────────────────────────────────
+  const setCard = useCallback((card: CreditCard) => {
+    dispatch({ type: "setCard", card });
+  }, []);
+
+  const setCardLimit = useCallback((value: number) => {
+    dispatch({ type: "setCardLimit", value });
+  }, []);
+
+  // Customer submits the card application → analyst decision opens (pending).
+  const submitCard = useCallback(() => {
+    dispatch({ type: "submitCard" });
+  }, []);
+
+  // Analyst approves/rejects the card application (dashboard). On approval the
+  // analyst passes the granted maximum limit (a % of the computed max).
+  const submitCardDecision = useCallback((decision: "approved" | "rejected", grantedLimit?: number) => {
+    dispatch({ type: "submitCardDecision", decision, grantedLimit });
+  }, []);
+
   // Pull the SLIK report (Excel by NIK) as soon as the KTP NIK is known.
   useEffect(() => {
     const nik = state.ocr.ktp?.nik;
@@ -988,6 +1056,14 @@ export function useNilamFlow() {
     setAppointment,
     submitAutoVerify,
     submitAutoDecision,
+    card: state.card,
+    cardLimit: state.cardLimit,
+    cardDecision: state.cardDecision,
+    cardGrantedLimit: state.cardGrantedLimit,
+    setCard,
+    setCardLimit,
+    submitCard,
+    submitCardDecision,
     userInput: state.userInput,
     setUserInput,
     previewDocs: state.previewDocs,

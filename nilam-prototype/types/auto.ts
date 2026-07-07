@@ -7,7 +7,7 @@
  */
 
 /** Which product the customer chose after the agree (S&K) page. */
-export type LoanType = "kpr" | "auto";
+export type LoanType = "kpr" | "auto" | "cc";
 
 /**
  * RM verification stage for a booked KKB appointment:

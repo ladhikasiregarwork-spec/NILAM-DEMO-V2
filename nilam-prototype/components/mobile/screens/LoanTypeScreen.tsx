@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Car, ChevronRight } from "lucide-react";
+import { Home, Car, CreditCard, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { LoanType } from "@/types/auto";
 
@@ -31,6 +31,13 @@ const OPTIONS: {
     subtitle: "Kredit Kendaraan Bermotor",
     desc: "Beli mobil impian. Pilih kendaraan, hitung cicilan, lalu janji temu dengan agen kami.",
     icon: Car,
+  },
+  {
+    id: "cc",
+    title: "Kartu Kredit",
+    subtitle: "BRI Credit Card",
+    desc: "Ajukan BRI Touch atau BRI Easy. Pilih kartu, tentukan limit, lalu tunggu persetujuan analis.",
+    icon: CreditCard,
   },
 ];
 

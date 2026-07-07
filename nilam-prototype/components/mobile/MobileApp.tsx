@@ -8,6 +8,8 @@ import type { UserInput } from "@/types/userInput";
 import type { DocumentId } from "@/types/documents";
 import type { AgunanData } from "@/types/agunan";
 import type { LoanType, Vehicle, AutoLoanCalc, AppointmentData, AutoVerifyStatus, AutoDecisionStatus } from "@/types/auto";
+import type { CreditCard, CardDecisionStatus } from "@/types/card";
+import { incomePartsFromOcr } from "@/lib/kemampuan";
 
 import { PhoneMockup } from "./PhoneMockup";
 import { MobileHeader } from "./MobileHeader";
@@ -29,6 +31,10 @@ import { VehicleSearchScreen } from "./screens/VehicleSearchScreen";
 import { VehicleDetailScreen } from "./screens/VehicleDetailScreen";
 import { AppointmentScreen } from "./screens/AppointmentScreen";
 import { AppointmentDoneScreen } from "./screens/AppointmentDoneScreen";
+import { CardReviewScreen } from "./screens/CardReviewScreen";
+import { CardSelectScreen } from "./screens/CardSelectScreen";
+import { CardDetailScreen } from "./screens/CardDetailScreen";
+import { CardDoneScreen } from "./screens/CardDoneScreen";
 
 // ─── Slide variants ──────────────────────────────────────────────────────────
 
@@ -79,6 +85,16 @@ interface MobileAppProps {
   autoVerify: AutoVerifyStatus;
   autoDecision: AutoDecisionStatus;
   autoVerifyNote?: string;
+  /** Credit-card state. */
+  card?: CreditCard;
+  setCard: (card: CreditCard) => void;
+  cardLimit: number;
+  setCardLimit: (value: number) => void;
+  cardDecision: CardDecisionStatus;
+  /** Analyst-approved maximum limit (caps card selection). */
+  cardGrantedLimit?: number;
+  /** Submit the card application → opens the analyst limit decision. */
+  submitCard: () => void;
   start: () => void;
   next: () => void;
   goBack: () => void;
@@ -130,6 +146,13 @@ export function MobileApp({
   autoVerify,
   autoDecision,
   autoVerifyNote,
+  card,
+  setCard,
+  cardLimit,
+  setCardLimit,
+  cardDecision,
+  cardGrantedLimit,
+  submitCard,
   start,
   next,
   goBack,
@@ -312,6 +335,59 @@ export function MobileApp({
             autoVerify={autoVerify}
             autoDecision={autoDecision}
             autoVerifyNote={autoVerifyNote}
+            onFinish={reset}
+          />
+        );
+      // ── Credit-card (Kartu Kredit) branch — analyst limit FIRST ────────
+      case "card_review":
+        return (
+          <CardReviewScreen
+            key="card_review"
+            status={cardDecision}
+            nama={userInput?.nama ?? ocr.ktp?.nama}
+            onSubmit={submitCard}
+            onRestart={reset}
+            onGoBack={goBack}
+            canGoBack={canGoBack}
+          />
+        );
+      case "card_select":
+        return (
+          <CardSelectScreen
+            key="card_select"
+            selected={card}
+            grantedLimit={cardGrantedLimit}
+            onSelect={(c) => {
+              setCard(c);
+              // Clamp the pre-selected limit to the analyst's granted limit.
+              if (cardGrantedLimit != null) setCardLimit(Math.min(cardGrantedLimit, c.maxLimit));
+              next();
+            }}
+            onGoBack={goBack}
+            canGoBack={canGoBack}
+          />
+        );
+      case "card_detail":
+        return (
+          <CardDetailScreen
+            key="card_detail"
+            card={card}
+            limit={cardLimit}
+            setLimit={setCardLimit}
+            monthlyIncome={incomePartsFromOcr(ocr).gajiBulanan}
+            grantedLimit={cardGrantedLimit}
+            onSubmit={next}
+            onGoBack={goBack}
+            canGoBack={canGoBack}
+          />
+        );
+      case "card_done":
+        return (
+          <CardDoneScreen
+            key="card_done"
+            card={card}
+            limit={cardLimit}
+            nama={userInput?.nama ?? ocr.ktp?.nama}
             onFinish={reset}
           />
         );

@@ -33,6 +33,49 @@ function num(s?: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * Extract usable map coordinates from a Rumah123 page.
+ *
+ * The schema.org GeoCoordinates block is often CORRUPT — its longitude is a
+ * duplicate of the latitude (e.g. lat == lon == -6.40704), which reverse-geocodes
+ * into the ocean and yields no kelurahan/kodepos. The correct coordinates live in
+ * the escaped Next.js data as an admin hierarchy — province / city / district
+ * (kecamatan) — each with its own centroid. We prefer the MOST SPECIFIC level
+ * that carries valid coordinates (district > city), so the reverse-geocoded
+ * kelurahan/kodepos land in the right sub-area rather than the city centre. A
+ * pair is only accepted when it is geographically plausible for Indonesia
+ * (lat −11..6, lon 95..141) and its lat ≠ lon (rejects the corrupt block).
+ */
+function extractLatLon(html: string): { lat?: number; lon?: number } {
+  const s = html.replace(/\\"/g, '"'); // unescape JSON-embedded-in-JSON (Next.js data)
+  const valid = (lat: number, lon: number) =>
+    Number.isFinite(lat) && Number.isFinite(lon) && lat !== lon &&
+    lat >= -11 && lat <= 6 && lon >= 95 && lon <= 141;
+
+  // Most-specific-first admin levels (Rumah123 key names vary by page version).
+  const LEVELS = ["village", "subdistrict", "kelurahan", "district", "kecamatan", "city", "kabupaten", "kota"];
+  for (const key of LEVELS) {
+    const m = s.match(
+      new RegExp(`"${key}"\\s*:\\s*\\{[^{}]*?"latitude"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)[^{}]*?"longitude"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "i"),
+    );
+    if (m) {
+      const lat = parseFloat(m[1]);
+      const lon = parseFloat(m[2]);
+      if (valid(lat, lon)) return { lat, lon };
+    }
+  }
+
+  // Fallback: first plausible {latitude, longitude} pair anywhere on the page.
+  const re = /"latitude"\s*:\s*"?(-?\d+(?:\.\d+)?)"?\s*,\s*"longitude"\s*:\s*"?(-?\d+(?:\.\d+)?)"?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const lat = parseFloat(m[1]);
+    const lon = parseFloat(m[2]);
+    if (valid(lat, lon)) return { lat, lon };
+  }
+  return {};
+}
+
 /** First capture group across a list of patterns. */
 function pick(html: string, patterns: RegExp[]): string | undefined {
   for (const re of patterns) {
@@ -45,8 +88,14 @@ function pick(html: string, patterns: RegExp[]): string | undefined {
 export function parseRumah123Html(html: string): ParsedListing {
   const harga = num(
     pick(html, [
-      /"priceCurrency"\s*:\s*"IDR"\s*,\s*"price"\s*:\s*(\d{6,})/,
-      /"price"\s*:\s*(\d{6,})/,
+      /"priceCurrency"\s*:\s*"IDR"\s*,\s*"price"\s*:\s*"?(\d{6,})/,
+      /"price"\s*:\s*"?(\d{6,})/,
+      // New-project ("perumahan baru") listings serialize price as a schema.org
+      // AggregateOffer with a RANGE (lowPrice/highPrice) instead of a single
+      // "price". Use the starting price (lowPrice) as the representative
+      // collateral value — matches how Rumah123 shows "Rp 1,4 - 3,7 Miliar".
+      /"lowPrice"\s*:\s*"?(\d{6,})/,
+      /"highPrice"\s*:\s*"?(\d{6,})/,
     ]),
   );
 
@@ -66,8 +115,7 @@ export function parseRumah123Html(html: string): ParsedListing {
     ]),
   );
 
-  const lat = num(pick(html, [/"latitude"\s*:\s*(-?\d+\.\d+)/]));
-  const lon = num(pick(html, [/"longitude"\s*:\s*(-?\d+\.\d+)/]));
+  const { lat, lon } = extractLatLon(html);
 
   // Listing photo: prefer og:image, fall back to a schema.org image URL.
   const imageUrl = pick(html, [
