@@ -1,9 +1,10 @@
 "use client";
 
-import { CreditCard as CardIcon, ChevronRight, Wifi, BadgeCheck } from "lucide-react";
+import { CreditCard as CardIcon, ChevronRight, BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatJuta, formatRupiah } from "@/lib/formatRupiah";
 import { CREDIT_CARDS } from "@/data/creditCards";
+import { CardVisual } from "./CardVisual";
 import type { CreditCard } from "@/types/card";
 
 interface CardSelectScreenProps {
@@ -50,21 +51,8 @@ export function CardSelectScreen({ selected, onSelect, grantedLimit, onGoBack, c
                 active ? "border-bri-blue bg-bri-blue/5" : "border-bri-line bg-white hover:border-bri-blue/50 hover:bg-bri-bg/40",
               )}
             >
-              {/* Mini card visual */}
-              <div
-                className="relative flex h-24 w-full flex-col justify-between overflow-hidden rounded-xl p-2.5 text-white shadow-soft"
-                style={{ background: c.gradient }}
-              >
-                <div className="flex items-start justify-between">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/85">{c.name}</span>
-                  <Wifi size={13} className="rotate-90 text-white/70" />
-                </div>
-                <div className="h-4 w-6 rounded bg-white/25" />
-                <div className="flex items-end justify-between">
-                  <span className="font-mono text-[10px] tracking-[0.16em] text-white/80">•••• •••• •••• 8021</span>
-                  <span className="text-[9px] font-bold italic text-white/90">{c.network}</span>
-                </div>
-              </div>
+              {/* Card visual — real BRI artwork */}
+              <CardVisual card={c} className="rounded-xl" />
 
               <div className="flex items-start justify-between gap-1">
                 <div className="min-w-0">

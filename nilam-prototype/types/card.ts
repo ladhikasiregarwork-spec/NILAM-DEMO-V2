@@ -46,6 +46,8 @@ export interface CreditCard {
   benefits: string[];
   /** Short highlight chips. */
   highlights: string[];
-  /** CSS gradient for the card visual. */
+  /** CSS gradient for the card visual (fallback when `image` is absent/broken). */
   gradient: string;
+  /** Real card artwork (path under /public); used for the card visual when present. */
+  image?: string;
 }

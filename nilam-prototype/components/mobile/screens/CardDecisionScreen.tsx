@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, XCircle, Loader2, Gavel, Sparkles, Wifi } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Gavel, Sparkles } from "lucide-react";
+import { CardVisual } from "./CardVisual";
 import { formatRupiah } from "@/lib/formatRupiah";
 import type { CreditCard, CardDecisionStatus } from "@/types/card";
 
@@ -78,21 +79,8 @@ export function CardDecisionScreen({ card, limit, status, nama, onFinish }: Card
 
       {card && (
         <>
-          {/* Card visual */}
-          <div
-            className="mt-3 flex h-28 w-full flex-col justify-between overflow-hidden rounded-2xl p-3 text-white shadow-soft"
-            style={{ background: card.gradient }}
-          >
-            <div className="flex items-start justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">{card.name}</span>
-              <Wifi size={15} className="rotate-90 text-white/70" />
-            </div>
-            <div className="h-5 w-7 rounded bg-white/25" />
-            <div className="flex items-end justify-between">
-              <span className="font-mono text-[11px] tracking-[0.18em] text-white/85">•••• •••• •••• 8021</span>
-              <span className="text-[10px] font-bold italic text-white/90">{card.network}</span>
-            </div>
-          </div>
+          {/* Card visual — real BRI artwork */}
+          <CardVisual card={card} className="mt-3" />
 
           {/* Approved limit headline */}
           <div className="mt-2 rounded-2xl bg-bri-navy px-3 py-2.5 text-white">

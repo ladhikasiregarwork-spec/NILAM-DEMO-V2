@@ -1,8 +1,9 @@
 "use client";
 
-import { Wifi, Check, Sparkles, Wallet, BadgePercent, ShieldCheck, Info, BadgeCheck } from "lucide-react";
+import { Check, Sparkles, Wallet, BadgePercent, ShieldCheck, Info, BadgeCheck } from "lucide-react";
 import { formatRupiah, formatJuta } from "@/lib/formatRupiah";
 import { recommendedLimit } from "@/lib/creditCard";
+import { CardVisual } from "./CardVisual";
 import type { CreditCard } from "@/types/card";
 
 interface CardDetailScreenProps {
@@ -43,21 +44,8 @@ export function CardDetailScreen({ card, limit, setLimit, monthlyIncome, granted
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto scroll-thin px-3 py-2">
-      {/* Card visual */}
-      <div
-        className="relative flex h-28 w-full shrink-0 flex-col justify-between overflow-hidden rounded-2xl p-3 text-white shadow-soft"
-        style={{ background: card.gradient }}
-      >
-        <div className="flex items-start justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">{card.name}</span>
-          <Wifi size={15} className="rotate-90 text-white/70" />
-        </div>
-        <div className="h-5 w-7 rounded bg-white/25" />
-        <div className="flex items-end justify-between">
-          <span className="font-mono text-[11px] tracking-[0.18em] text-white/85">•••• •••• •••• 8021</span>
-          <span className="text-[10px] font-bold italic text-white/90">{card.network}</span>
-        </div>
-      </div>
+      {/* Card visual — real BRI artwork */}
+      <CardVisual card={card} className="shrink-0" />
 
       <div className="mt-2">
         <h2 className="text-[13px] font-bold leading-tight text-bri-ink">{card.name}</h2>

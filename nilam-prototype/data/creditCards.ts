@@ -26,6 +26,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     ],
     highlights: ["Iuran gratis", "Cicilan 0%", "Cashback 1%"],
     gradient: "linear-gradient(135deg, #00529C 0%, #1A6FC4 100%)",
+    image: "/cards/bri-easy.png",
   },
   {
     id: "touch",
@@ -47,6 +48,7 @@ export const CREDIT_CARDS: CreditCard[] = [
     ],
     highlights: ["Airport lounge", "Contactless", "Reward berlipat"],
     gradient: "linear-gradient(135deg, #0B1E3B 0%, #00305C 55%, #00529C 100%)",
+    image: "/cards/bri-touch.png",
   },
 ];
 

@@ -26,6 +26,7 @@ import {
   MONTHLY_TXN,
   MONTHLY_SUMMARY,
 } from "@/lib/cardAnalytics";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { incomePartsFromOcr, kemampuanBayar, penghasilanBulanan, dirRate } from "@/lib/kemampuan";
 import { deriveDocumentStatuses } from "@/data/documents";
 import { EMPLOYMENT_AGREEMENT } from "@/data/profileFixtures";
@@ -45,6 +46,7 @@ import { SlikOjkCard } from "./SlikOjkCard";
 import { PreviewDocsCard } from "./PreviewDocsCard";
 import { GeoRadiusCard } from "./GeoRadiusCard";
 import { CardLimitCalcCard } from "./CardLimitCalcCard";
+import { CardVisual } from "../mobile/screens/CardVisual";
 import { TxnAverageCard } from "./TxnAverageCard";
 
 const BIG_TABS = [
@@ -122,6 +124,9 @@ export function CreditCardDashboard({
   previewDocs,
 }: CreditCardDashboardProps) {
   const [tab, setTab] = useState<BigTab>("summary");
+  // Real device geolocation for the domicile radius (falls back to the address
+  // estimate until the browser resolves / permission is granted).
+  const geo = useCurrentLocation();
 
   // Card "ready" state derived from data presence (no orchestration pipeline).
   const dataReady = !!(ocr.ktp || ocr.kk || ocr.slipGaji || ocr.mutasi || ocr.skPerusahaan);
@@ -190,8 +195,15 @@ export function CreditCardDashboard({
     creditTxnAvg30d: txnSummary.avgMonthlyCredit,
     debitTxnAvg30d: txnSummary.avgMonthlyDebit,
   });
-  const addrGeo = addressGeo(ocr.ktp?.alamat ?? ocr.kk?.alamat);
-  const txnGeo = txnBehaviorGeoService(ocr.ktp?.nik ?? userInput?.nik);
+  // Domicile radius = the customer's REGISTERED address (KTP alamat, or the KK /
+  // user-input fallback), reverse-geocoded to a coordinate. Static — independent
+  // of the device's current location.
+  const domisiliPoint = addressGeo(ocr.ktp?.alamat ?? ocr.kk?.alamat);
+  // BRI-activity radius = where the customer is actually active. Uses the device's
+  // REAL geolocation once resolved; until then (or if permission is denied) it
+  // falls back to the transaction-behaviour estimate keyed off the NIK.
+  const geoLive = geo.status === "ok" && geo.point != null;
+  const aktivitasPoint = geo.point ?? txnBehaviorGeoService(ocr.ktp?.nik);
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto scroll-thin bg-[#F5F7FA] p-3">
@@ -200,9 +212,16 @@ export function CreditCardDashboard({
         <div className="flex items-center gap-3">
           <div
             className="flex h-12 w-16 items-center justify-center overflow-hidden rounded-lg text-white"
-            style={{ background: card?.gradient ?? "linear-gradient(135deg,#94A3B8,#CBD5E1)" }}
+            style={card?.image ? undefined : { background: card?.gradient ?? "linear-gradient(135deg,#94A3B8,#CBD5E1)" }}
           >
-            {card ? <Wifi size={18} className="rotate-90 text-white/80" /> : <CardIcon size={22} />}
+            {card?.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={card.image} alt={`Kartu ${card.name}`} className="h-full w-full object-cover" />
+            ) : card ? (
+              <Wifi size={18} className="rotate-90 text-white/80" />
+            ) : (
+              <CardIcon size={22} />
+            )}
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-bri-muted">Pengajuan Kartu Kredit</p>
@@ -283,18 +302,28 @@ export function CreditCardDashboard({
           <div className="grid grid-cols-3 items-start gap-3">
             <SlikOjkCard status={docStatus} loans={slikLoans} totalAngsuran={slikTotalAngsuran} score={score} view="summary" />
             <GeoRadiusCard
-              title="Radius Alamat"
+              title="Radius Domisili"
               icon={MapPin}
-              subtitle="Radius area di sekitar koordinat alamat (input / KTP)."
-              point={addrGeo}
+              subtitle="Estimasi dari alamat KTP / input nasabah."
+              point={domisiliPoint}
               dummy
             />
             <GeoRadiusCard
-              title="Radius Perilaku Transaksi"
+              title="Radius Aktivitas BRI"
               icon={Compass}
-              subtitle="Radius area di sekitar koordinat dominan transaksi (layanan geolokasi)."
-              point={txnGeo}
-              dummy
+              subtitle={
+                geoLive
+                  ? "Lokasi nyata perangkat (GPS), di-reverse-geocode."
+                  : geo.status === "locating"
+                  ? "Mengambil lokasi perangkat…"
+                  : geo.status === "denied" || geo.status === "unsupported"
+                  ? "Izin lokasi tidak tersedia — estimasi perilaku transaksi."
+                  : "Estimasi dari perilaku transaksi."
+              }
+              point={aktivitasPoint}
+              badge={geoLive ? "LIVE GPS" : undefined}
+              badgeTone="emerald"
+              dummy={!geoLive}
             />
           </div>
 
@@ -460,20 +489,7 @@ function CardTab({
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
         <Card title="Kartu Dipilih" icon={CardIcon}>
-          <div
-            className="mb-3 flex h-28 w-full flex-col justify-between overflow-hidden rounded-xl p-3 text-white shadow-soft"
-            style={{ background: card.gradient }}
-          >
-            <div className="flex items-start justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">{card.name}</span>
-              <Wifi size={16} className="rotate-90 text-white/70" />
-            </div>
-            <div className="h-6 w-8 rounded bg-white/25" />
-            <div className="flex items-end justify-between">
-              <span className="font-mono text-[12px] tracking-[0.2em] text-white/85">•••• •••• •••• 8021</span>
-              <span className="text-[11px] font-bold italic text-white/90">{card.network}</span>
-            </div>
-          </div>
+          <CardVisual card={card} className="mb-3 rounded-xl" />
           <p className="text-[10px] text-bri-muted">{card.tagline}</p>
           <div className="mt-2 flex flex-col gap-1">
             {card.benefits.map((b) => (

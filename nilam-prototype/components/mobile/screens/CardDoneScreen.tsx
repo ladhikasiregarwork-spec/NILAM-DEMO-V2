@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Wifi, Sparkles, Truck, CreditCard as CardIcon, Info } from "lucide-react";
+import { CheckCircle2, Sparkles, Truck, CreditCard as CardIcon, Info } from "lucide-react";
 import { formatRupiah } from "@/lib/formatRupiah";
+import { CardVisual } from "./CardVisual";
 import type { CreditCard } from "@/types/card";
 
 interface CardDoneScreenProps {
@@ -54,23 +55,8 @@ export function CardDoneScreen({ card, limit, nama, onFinish }: CardDoneScreenPr
         </p>
       </div>
 
-      {/* Card visual */}
-      {card && (
-        <div
-          className="mt-3 flex h-28 w-full shrink-0 flex-col justify-between overflow-hidden rounded-2xl p-3 text-white shadow-soft"
-          style={{ background: card.gradient }}
-        >
-          <div className="flex items-start justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">{card.name}</span>
-            <Wifi size={15} className="rotate-90 text-white/70" />
-          </div>
-          <div className="h-5 w-7 rounded bg-white/25" />
-          <div className="flex items-end justify-between">
-            <span className="font-mono text-[11px] tracking-[0.18em] text-white/85">•••• •••• •••• 8021</span>
-            <span className="text-[10px] font-bold italic text-white/90">{card.network}</span>
-          </div>
-        </div>
-      )}
+      {/* Card visual — real BRI artwork */}
+      {card && <CardVisual card={card} className="mt-3 shrink-0" />}
 
       {/* Ringkasan kartu */}
       <div className="mt-2 rounded-2xl border border-bri-line bg-white p-2.5 shadow-soft">
