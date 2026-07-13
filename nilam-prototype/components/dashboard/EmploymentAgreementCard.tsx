@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileSignature, CalendarRange, Pencil } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { masaKerjaFromTanggalMulai } from "@/lib/masaKerja";
 import type { NodeStatus } from "@/types/orchestration";
 import type { EmploymentAgreement } from "@/types/profile";
 
@@ -42,7 +43,14 @@ export function EmploymentAgreementCard({
   const [edits, setEdits] = useState<Partial<Record<EditableField, string>>>({});
   const isSuccess = status === "success" && !missing;
 
-  if (!isSuccess || !agreement) {
+  // Masa Kerja is derived from the join date (tanggalMulai) so it always stays
+  // consistent with the contract period shown below — the stored string is only
+  // a fallback when the join date can't be parsed.
+  const display: EmploymentAgreement | undefined = agreement
+    ? { ...agreement, masaKerja: masaKerjaFromTanggalMulai(agreement.tanggalMulai) ?? agreement.masaKerja }
+    : undefined;
+
+  if (!isSuccess || !display) {
     return (
       <div className="flex h-full flex-col rounded-xl border border-bri-line bg-white px-2.5 py-2 shadow-soft">
         <span className="mb-1.5 block shrink-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-bri-muted">
@@ -94,7 +102,7 @@ export function EmploymentAgreementCard({
             <div key={f.key} className="flex items-center justify-between gap-1">
               <span className="shrink-0 text-[8.5px] text-bri-muted">{f.label}</span>
               <input
-                value={edits[f.key] ?? String(agreement[f.key] ?? "")}
+                value={edits[f.key] ?? String(display[f.key] ?? "")}
                 onChange={(e) => setEdits((p) => ({ ...p, [f.key]: e.target.value }))}
                 className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[8.5px] font-medium text-bri-ink hover:border-bri-line focus:border-bri-blue focus:bg-white focus:outline-none"
               />
@@ -106,9 +114,9 @@ export function EmploymentAgreementCard({
         <div className="mt-1 flex shrink-0 items-center gap-1 border-t border-bri-line pt-1.5">
           <CalendarRange size={10} className="shrink-0 text-bri-navy/70" strokeWidth={2} />
           <span className="text-[8.5px] text-bri-ink">
-            {agreement.tanggalMulai}
+            {display.tanggalMulai}
             <span className="px-1 text-bri-muted">→</span>
-            {agreement.tanggalBerakhir}
+            {display.tanggalBerakhir}
           </span>
         </div>
       </div>
